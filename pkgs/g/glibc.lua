@@ -1,6 +1,6 @@
 package = {
     -- base info
-    name = "xpackage",
+    name = "glibc",
     description = "XIM Package File Template",
 
     authors = "sunrisepeak",
@@ -11,28 +11,18 @@ package = {
     type = "package",
 
     xpm = {
-        windows = {
-            ["0.0.0"] = { },
-        },
         linux = {
             ["0.0.0"] = { },
         },
-        ubuntu = { ref = "linux" },
-        archlinux = { ref = "linux" },
-        manjaro = { ref = "linux" },
     },
 }
 
-import("xim.base.runtime")
-
-local pkginfo = runtime.get_pkginfo()
-
 function installed()
-    return os.iorun("xvm list xpackage")
+    return os.iorun("xvm list glibc")
 end
 
 function install()
-    print("install xpackage...")
+    print("install glibc...")
 
     -- your install implementation
     -- ...
@@ -45,15 +35,11 @@ function config()
     -- ...
 
     -- config xvm
-    os.exec(format(
-        [[xvm add xpackage %s --alias "echo hello-xpackage"]],
-        pkginfo.version
-    ))
     return true
 end
 
 function uninstall()
-    os.exec("xvm remove xpackage " .. pkginfo.version)
+    os.exec("xvm remove glibc " .. pkginfo.version)
 
     -- your uninstall implementation
     -- ...

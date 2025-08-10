@@ -1,23 +1,23 @@
-# xim-pkgindex-template
+# xim-pkgindex-fromsource
 
-xim package-index - template repository
+xim package-index - fromsource repository
 
 ## 添加索引仓库
 
 > 添加索引仓库到xim的索引仓库管理器中
 
 ```bash
-xim --add-indexrepo namespace:https://github.com/d2learn/xim-pkgindex-template.git
+xim --add-indexrepo fromsource:https://github.com/d2learn/xim-pkgindex-fromsource.git
 ```
 
 ## 使用仓库中的包
 
 ```bash
-xlings install namespace:pkgname
+xlings install fromsource:pkgname
 ```
 或
 ```bash
-xim -i namespace:pkgname
+xim -i fromsource:pkgname
 ```
 
 ## 其他
