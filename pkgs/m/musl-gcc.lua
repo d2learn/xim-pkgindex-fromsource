@@ -51,8 +51,13 @@ import("xim.libxpkg.xvm")
 function install()
     local install_dir = pkginfo.install_dir()
     os.tryrm(install_dir)
-    system.exec(string.format("musl-cross-make %s %s %s",
-        pkginfo.version(), "x86_64", install_dir
+    system.exec(string.format("musl-cross-make %s" .. 
+        " --target %s" ..
+        " --output %s" ..
+        " --with-dynamic-linker %s",
+        pkginfo.version(), "x86_64", install_dir,
+        -- xlings's global-workspace dir - ld.so
+        "/home/xlings/.xlings_data/lib/ld-musl-x86_64.so.1"
     ))
     return true
 end
