@@ -47,6 +47,7 @@ package = {
 import("xim.libxpkg.system")
 import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.xvm")
+import("xim.libxpkg.log")
 
 function install()
     local install_dir = pkginfo.install_dir()
