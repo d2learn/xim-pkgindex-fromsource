@@ -9,6 +9,7 @@ package = {
 
     -- xim pkg info
     type = "package",
+    namespace = "fromsource",
 
     xpm = {
         linux = {

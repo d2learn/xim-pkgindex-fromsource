@@ -12,6 +12,7 @@ package = {
 
     -- xim pkg info
     type = "package",
+    namespace = "fromsource",
     archs = {"x86_64"},
     status = "stable", -- dev, stable, deprecated
     categories = {"compiler", "gnu", "language"},
