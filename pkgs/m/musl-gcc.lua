@@ -67,14 +67,27 @@ end
 function config()
     local program_bindir = path.join(pkginfo.install_dir(), "bin")
 
+    -- binding tree - root node
+    local binding_tree_root = "musl-gcc@" .. pkginfo.version()
+    xvm.add("musl-gcc", {
+        bindir = program_bindir,
+        alias = "x86_64-linux-musl-gcc",
+    })
+
     for _, program in ipairs(package.programs) do
         local program_fullname = "x86_64-linux-" .. program
-        xvm.add(program_fullname, { bindir = program_bindir })
-        xvm.add(program, {
-            version = pkginfo.version(),
+        xvm.add(program_fullname, {
             bindir = program_bindir,
-            alias = program_fullname,
+            binding = binding_tree_root,
         })
+        if program ~= "musl-gcc" then
+            xvm.add(program, {
+                version = pkginfo.version(),
+                bindir = program_bindir,
+                alias = program_fullname,
+                binding = binding_tree_root,
+            })
+        end
     end
 
 -- runtime lib
@@ -91,6 +104,7 @@ function config()
         bindir = musl_lib_dir,
         type = "lib",
         alias = "libc.so",
+        binding = binding_tree_root,
     })
 
     xvm.add("libstdc++", {
@@ -99,6 +113,7 @@ function config()
         bindir = musl_lib_dir,
         type = "lib",
         alias = "libstdc++.so.6",
+        binding = binding_tree_root,
     })
 
     xvm.add("libgcc_s", {
@@ -107,6 +122,7 @@ function config()
         bindir = musl_lib_dir,
         type = "lib",
         alias = "libgcc_s.so.1",
+        binding = binding_tree_root,
     })
 
     -- add ld.so (musl's ld.so wrapper)
@@ -116,6 +132,7 @@ function config()
         bindir = musl_lib_dir,
         type = "lib",
         alias = "libc.so",
+        binding = binding_tree_root,
     })
 
 -- special commands
@@ -126,7 +143,8 @@ function config()
         envs = {
             -- ? alias = "libc.so --library-path musl_lib_dir --list",
             LD_LIBRARY_PATH = musl_lib_dir,
-        }
+        },
+        binding = binding_tree_root,
     })
 
     xvm.add("musl-loader", {
@@ -136,16 +154,19 @@ function config()
         envs = {
             -- ? alias = "libc.so --library-path musl_lib_dir",
             LD_LIBRARY_PATH = musl_lib_dir,
-        }
+        },
+        binding = binding_tree_root,
     })
 
     xvm.add("musl-gcc-static", {
         bindir = program_bindir,
         alias = "x86_64-linux-musl-gcc -static",
+        binding = binding_tree_root,
     })
     xvm.add("musl-g++-static", {
         bindir = program_bindir,
         alias = "x86_64-linux-musl-g++ -static",
+        binding = binding_tree_root,
     })
     return true
 end
