@@ -33,7 +33,7 @@ package = {
             ["10.1.0"] = { url = qemu_url("10.1.0") },
             ["9.2.4"] = { url = qemu_url("9.2.4") },
             ["8.2.2"] = { url = qemu_url("8.2.2") },
-            ["7.3.19"] = { url = qemu_url("7.3.19") },
+            ["7.2.19"] = { url = qemu_url("7.3.19") },
         },
     },
 }
@@ -46,10 +46,21 @@ function install()
     -- todo: fix host and workspace issues
     system.exec("xvm workspace global --active false")
         os.cd("qemu-" .. pkginfo.version())
-        system.exec("./configure --prefix="
-            .. pkginfo.install_dir()
+        system.exec("./configure"
+            .. " --prefix=" .. pkginfo.install_dir()
+            -- share qemu data files
+            .. " --datadir=" .. path.join(pkginfo.install_dir(), "share/qemu")
             .. " --target-list=x86_64-softmmu,x86_64-linux-user"
+            .. " --enable-slirp" -- for -netdev user
+            .. " --enable-vnc" -- for -vnc :0
+            .. " --enable-gtk" -- for -display gtk
+            .. " --enable-sdl" -- for -display sdl
+            .. " --enable-opengl" -- for -display gtk,gl=on
+            .. " --enable-system" -- build qemu-system-*
             .. " --enable-kvm"
+            .. " --enable-virtfs" -- for -virtfs
+            .. " --enable-curses" -- for -display curses
+            .. " --enable-tools" -- build qemu-img and others
         )
         system.exec("make -j8", { retry = 3 })
         system.exec("make install")
