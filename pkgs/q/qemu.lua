@@ -41,8 +41,21 @@ package = {
 import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.system")
 import("xim.libxpkg.xvm")
+import("xim.libxpkg.log")
 
 function install()
+
+    -- install dependencies
+    -- TODO: add system name support in libxpkg
+    log.warn("Installing dependencies for [ " .. linuxos.name() .. " ] ...")
+
+    for _, dep in ipairs(__dependencies()[linuxos.name()]() or {}) do
+        log.info("Installing dependency: " .. dep)
+        if linuxos.name() == "debian" or linuxos.name() == "ubuntu" then
+            system.exec("sudo apt-get install -y " .. dep)
+        end
+    end
+
     -- todo: fix host and workspace issues
     system.exec("xvm workspace global --active false")
         os.cd("qemu-" .. pkginfo.version())
@@ -61,6 +74,7 @@ function install()
             .. " --enable-virtfs" -- for -virtfs
             .. " --enable-curses" -- for -display curses
             .. " --enable-tools" -- build qemu-img and others
+            .. " --enable-fdt=system" -- use system device tree
         )
         system.exec("make -j8", { retry = 3 })
         system.exec("make install")
@@ -85,4 +99,24 @@ function uninstall()
         xvm.remove(prog)
     end
     return true
+end
+
+-- private
+
+function __dependencies()
+    return {
+        ["ubuntu"] = __debian_deps,
+        ["debian"] = __debian_deps,
+    }
+end
+
+function __debian_deps()
+    return {
+        "libfdt-dev", -- for dtb / --enable-fdt=system to fix keyboard input issue
+        -- todo: verify if these are needed
+        "autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev",
+        "gawk build-essential bison flex texinfo gperf libtool patchutils bc",
+        "zlib1g-dev libexpat-dev pkg-config  libglib2.0-dev libpixman-1-dev libsdl2-dev",
+        "git tmux python3 python3-pip ninja-build",
+    }
 end
