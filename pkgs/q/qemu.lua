@@ -28,7 +28,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "ninja", "gcc" },
+            deps = { "make", "ninja", "gcc@pmwrapper" },
             ["latest"] = { ref = "10.1.0" },
             ["10.1.0"] = { url = qemu_url("10.1.0") },
             ["9.2.4"] = { url = qemu_url("9.2.4") },
@@ -53,6 +53,8 @@ function install()
         log.info("Installing dependency: " .. dep)
         if linuxos.name() == "debian" or linuxos.name() == "ubuntu" then
             system.exec("sudo apt-get install -y " .. dep)
+        elseif linuxos.name() == "archlinux" or linuxos.name() == "manjaro" then
+            system.exec("sudo pacman -S --noconfirm " .. dep)
         end
     end
 
@@ -107,6 +109,8 @@ function __dependencies()
     return {
         ["ubuntu"] = __debian_deps,
         ["debian"] = __debian_deps,
+        ["archlinux"] = __archlinux_deps,
+        ["manjaro"] = __archlinux_deps,
     }
 end
 
@@ -118,5 +122,18 @@ function __debian_deps()
         "gawk build-essential bison flex texinfo gperf libtool patchutils bc",
         "zlib1g-dev libexpat-dev pkg-config  libglib2.0-dev libpixman-1-dev libsdl2-dev",
         "git tmux python3 python3-pip ninja-build",
+    }
+end
+
+function __archlinux_deps()
+    return {
+        -- wget bridge-utils dnsmasq
+        -- diffutils pkgconf which unzip util-linux dosfstools
+        -- flex texinfo gmp mpfr
+        -- libmpc openssl
+        "wget", "bridge-utils", "dnsmasq",
+        "diffutils", "pkgconf", "which", "unzip", "util-linux", "dosfstools",
+        "flex", "texinfo", "gmp", "mpfr",
+        "libmpc", "openssl",
     }
 end
