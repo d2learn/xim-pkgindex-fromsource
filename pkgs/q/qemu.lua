@@ -132,8 +132,9 @@ function __archlinux_deps()
         -- flex texinfo gmp mpfr
         -- libmpc openssl
         "wget", "bridge-utils", "dnsmasq",
-        "diffutils", "pkgconf", "which", "unzip", "util-linux", "dosfstools",
+        "diffutils", "pkgconf", "which", "unzip", "dosfstools",
         "flex", "texinfo", "gmp", "mpfr",
         "libmpc", "openssl",
+        -- "util-linux" ? fdisk?
     }
 end
