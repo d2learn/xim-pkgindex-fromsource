@@ -131,10 +131,11 @@ function __archlinux_deps()
         -- diffutils pkgconf which unzip util-linux dosfstools
         -- flex texinfo gmp mpfr
         -- libmpc openssl
-        "wget", "bridge-utils", "dnsmasq",
-        "diffutils", "pkgconf", "which", "unzip", "dosfstools",
-        "flex", "texinfo", "gmp", "mpfr",
-        "libmpc", "openssl",
+        "wget bridge-utils dnsmasq",
+        "diffutils pkgconf which unzip dosfstools",
+        "flex texinfo gmp mpfr",
+        "libmpc openssl", -- dtc for libfdt
         -- "util-linux" ? fdisk?
+        "dtc git python ninja make gcc",
     }
 end
