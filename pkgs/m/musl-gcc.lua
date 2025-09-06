@@ -50,6 +50,11 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.xvm")
 import("xim.libxpkg.log")
 
+local runtime_libs = {
+    "libc.so", -- "ld-musl-x86_64.so.1", -- musl-libc
+    "libstdc++.so.6", "libgcc_s.so.1",
+}
+
 function install()
     local install_dir = pkginfo.install_dir()
     os.tryrm(install_dir)
@@ -96,44 +101,23 @@ function config()
         pkginfo.install_dir(),
         "x86_64-linux-musl", "lib"
     )
-
-    -- add musl's libc libc.so and libstdc++.so.6 , libgcc_s.so.1
-    xvm.add("musl-libc", {
+    local runtime_lib_config = {
         version = "musl-gcc-" .. pkginfo.version(),
-        filename = "libc.so",
         bindir = musl_lib_dir,
         type = "lib",
-        alias = "libc.so",
         binding = binding_tree_root,
-    })
+    }
 
-    xvm.add("libstdc++", {
-        version = "musl-gcc-" .. pkginfo.version(),
-        filename = "libstdc++.so.6",
-        bindir = musl_lib_dir,
-        type = "lib",
-        alias = "libstdc++.so.6",
-        binding = binding_tree_root,
-    })
-
-    xvm.add("libgcc_s", {
-        version = "musl-gcc-" .. pkginfo.version(),
-        filename = "libgcc_s.so.1",
-        bindir = musl_lib_dir,
-        type = "lib",
-        alias = "libgcc_s.so.1",
-        binding = binding_tree_root,
-    })
+    for _, lib in ipairs(runtime_libs) do
+        runtime_lib_config.filename = lib -- target file name
+        runtime_lib_config.alias = lib -- source file name
+        xvm.add(lib, runtime_lib_config)
+    end
 
     -- add ld.so (musl's ld.so wrapper)
-    xvm.add("ld-musl", {
-        version = "musl-gcc-" .. pkginfo.version(),
-        filename = "ld-musl-x86_64.so.1",
-        bindir = musl_lib_dir,
-        type = "lib",
-        alias = "libc.so",
-        binding = binding_tree_root,
-    })
+    runtime_lib_config.filename = "ld-musl-x86_64.so.1"
+    runtime_lib_config.alias = "libc.so"
+    xvm.add("ld-musl-x86_64.so.1", runtime_lib_config)
 
 -- special commands
     xvm.add("musl-ldd", {
@@ -173,18 +157,21 @@ end
 
 function uninstall()
     local install_dir = pkginfo.install_dir()
+    local musl_gcc_version = "musl-gcc-" .. pkginfo.version()
+
     for _, program in ipairs(package.programs) do
         xvm.remove(program)
         xvm.remove("x86_64-linux-" .. program)
     end
     -- runtime libraries
-    xvm.remove("musl-libc", "musl-gcc-" .. pkginfo.version())
-    xvm.remove("ld-musl", "musl-gcc-" .. pkginfo.version())
-    xvm.remove("libstdc++", "musl-gcc-" .. pkginfo.version())
-    xvm.remove("libgcc_s", "musl-gcc-" .. pkginfo.version())
+    xvm.remove("ld-musl-x86_64.so.1", musl_gcc_version)
+    for _, lib in ipairs(runtime_libs) do
+        xvm.remove(lib, musl_gcc_version)
+    end
+
     -- ld.so wrapper
-    xvm.remove("musl-ldd", "musl-gcc-" .. pkginfo.version())
-    xvm.remove("musl-loader", "musl-gcc-" .. pkginfo.version())
+    xvm.remove("musl-ldd", musl_gcc_version)
+    xvm.remove("musl-loader", musl_gcc_version)
     xvm.remove("musl-gcc-static")
     xvm.remove("musl-g++-static")
     return true

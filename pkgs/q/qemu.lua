@@ -14,6 +14,8 @@ package = {
     docs = "https://www.qemu.org/documentation",
 
     -- xim pkg info
+    type = "package",
+    namespace = "fromsource",
     archs = {"x86_64"},
     status = "stable", -- dev, stable, deprecated
     categories = {"os", "emulator"},
@@ -28,7 +30,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "ninja", "gcc@pmwrapper" },
+            deps = { "make", "ninja", "gcc" },
             ["latest"] = { ref = "10.1.0" },
             ["10.1.0"] = { url = qemu_url("10.1.0") },
             ["9.2.4"] = { url = qemu_url("9.2.4") },
