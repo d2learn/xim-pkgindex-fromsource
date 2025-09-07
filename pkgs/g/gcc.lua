@@ -89,6 +89,9 @@ function install()
     --__create_sysroot(sysroot_dir)
 
     log.info("3.build config...")
+-- create workspace for build - todo
+    local old_glibc_info = xvm.info("glibc", "")
+    xvm.use("glibc", "2.39")
     system.exec(string.format("%s"
         .. [[ --with-pkgversion="XPKG: xlings install fromsource:gcc"]]
         .. " --with-build-sysroot=" .. system.subos_sysrootdir() -- glibc headers
@@ -105,12 +108,14 @@ function install()
         .. " --disable-libsanitizer" -- sanitizer_platform_limits_posix.cc multiple definition of ‘enum fsconfig_command’
     , path.join(sourcedir, "configure"), pkginfo.install_dir()))
 
+
     log.info("4.build gcc...")
     system.exec("time make -j24", { retry = 3 })
 
     log.info("5.install gcc...")
     system.exec("make install")
 
+    xvm.use("glibc", old_glibc_info["Version"])
     return true
 end
 

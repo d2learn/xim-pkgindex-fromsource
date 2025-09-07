@@ -2,25 +2,33 @@ function __glic_url(version) return format("http://ftp.gnu.org/gnu/libc/glibc-%s
 function __glic_mirror_url(version) return format("https://ftpmirror.gnu.org/libc/glibc-%s.tar.xz", version) end
 
 package = {
+    homepage = "https://www.gnu.org/software/libc",
     -- base info
     name = "glibc",
-    description = "GCC, the GNU Compiler Collection",
+    description = "The GNU C Library",
 
     authors = "GNU",
     licenses = "GPL",
-    repo = "https://github.com/gcc-mirror/gcc",
-    docs = "https://gcc.gnu.org/wiki",
+    repo = "https://sourceware.org/git/?p=glibc.git;a=summary",
+    docs = "https://www.gnu.org/doc/doc.html",
 
     -- xim pkg info
     type = "package",
-    namespace = "fromsource",
     archs = {"x86_64"},
     status = "stable", -- dev, stable, deprecated
-    categories = {"compiler", "gnu", "language"},
-    keywords = {"compiler", "gnu", "gcc", "language", "c", "c++"},
+    categories = {"libc", "gnu"},
+    keywords = {"libc", "gnu"},
 
     -- xvm: xlings version management
     xvm_enable = true,
+
+    programs = {
+        "ldd",
+        "libc.so", "libc.so.6",
+        "ld-linux-x86-64.so.2", "libdl.so.2",
+        "libm.so", "libm.so.6", "libmvec.so.1",
+        "libpthread.so.0", "libpthread.a",
+    },
 
     xpm = {
         linux = {
