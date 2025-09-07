@@ -14,6 +14,7 @@ package = {
 
     -- xim pkg info
     type = "package",
+    namespace = "fromsource",
     archs = {"x86_64"},
     status = "stable", -- dev, stable, deprecated
     categories = {"libc", "gnu"},
@@ -32,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "gcc", "linux-headers@5.11.1" },
+            deps = { "make", "gcc", "linux-headers@5.11.1", "binutils@2.42" },
             ["latest"] = { ref = "2.39" },
             ["2.39"] = {
                     url = {

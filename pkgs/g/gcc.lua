@@ -33,7 +33,7 @@ package = {
             deps = {
                 "make", "gcc", "xz", "gzip", "bzip2",
                 "linux-headers@5.11.1", "glibc@2.39", 
-                "linux-sysroot-create",
+                "gcc-specs-config", "binutils@2.42",
             },
             ["latest"] = { ref = "15.1.0" },
             ["15.1.0"] = { url = __gcc_url("15.1.0") },
@@ -81,28 +81,44 @@ function install()
     io.writefile("contrib/download_prerequisites", filecontent)
     system.exec("contrib/download_prerequisites --directory=" .. prerequisites_dir)
 
-    log.info("2.create linux sysroot...")
-    local sysroot_dir = path.join(builddir, "sysroot")
+    --log.info("2.create linux sysroot...")
+    --local sysroot_dir = path.join(builddir, "sysroot")
 
     os.mkdir(builddir)
     os.cd(builddir)
     --__create_sysroot(sysroot_dir)
 
     log.info("3.build config...")
--- create workspace for build - todo
+
     local old_glibc_info = xvm.info("glibc", "")
+    local sysroot_dir = system.subos_sysrootdir()
+
+-- config gcc (enable gcc-self run in xlings subos by gcc (xlings subos version))
+--[[
+    local linker_path = path.join(sysroot_dir, "lib/ld-linux-x86-64.so.2")
+    local libdir = path.join(sysroot_dir, "lib")
+    local gcc_config = string.format(
+        -- CFLAGS="--sysroot=%s" CXXFLAGS="--sysroot=%s"  -- by --with-build-sysroot
+         LDFLAGS="--dynamic-linker %s" , -- self
+        --..  --with-extra-ldflags="--dynamic-linker %s --enable-new-dtags -rpath %s" , -- gcc target
+        linker_path
+]]
+
+-- create workspace for build - todo
+
     xvm.use("glibc", "2.39")
     system.exec(string.format("%s"
+        --.. gcc_config -- pass sysroot to gcc compile/link flags(for gcc)
         .. [[ --with-pkgversion="XPKG: xlings install fromsource:gcc"]]
-        .. " --with-build-sysroot=" .. system.subos_sysrootdir() -- glibc headers
+        .. " --with-build-sysroot=" .. sysroot_dir -- glibc headers
         --.. " --with-native-system-header-dir=/include"
-        .. " --with-sysroot=" .. system.subos_sysrootdir()
+        .. " --with-sysroot=" .. sysroot_dir
         .. " --prefix=%s"
         .. " --enable-languages=c,c++"
         .. " --disable-multilib"
         .. " --disable-bootstrap"
         .. " --disable-werror"
-        --.. " --enable-lto" -- plugin
+        .. " --disable-lto" -- (--enable-lto) TODO: liblto_plugin.so -> libc.so.6 version mismatch
         .. " --enable-threads=posix"
         .. " --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu"
         .. " --disable-libsanitizer" -- sanitizer_platform_limits_posix.cc multiple definition of ‘enum fsconfig_command’
@@ -134,6 +150,7 @@ function config()
         }
     }
 
+    log.warn("add gcc bin...")
     for _, prog in ipairs(package.programs) do
         if gcc_tool[prog] then
             config.version = "gcc-" .. pkginfo.version()
@@ -145,7 +162,7 @@ function config()
     end
 
 -- lib
-    log.info("add gcc libs...")
+    log.warn("add gcc libs...")
     local lib_config = {
         type = "lib",
         version = "gcc-" .. pkginfo.version(),
@@ -158,6 +175,20 @@ function config()
         lib_config.alias = lib -- source file name
         xvm.add(lib, lib_config)
     end
+
+
+    log.warn("gcc spec config...")
+    local sysrootdir = system.subos_sysrootdir()
+    local linker_path = path.join(sysrootdir, "lib/ld-linux-x86-64.so.2")
+    local libdir = path.join(sysrootdir, "lib")
+    local gcc_bin = path.join(pkginfo.install_dir(), "bin/gcc")
+
+    system.exec("gcc-specs-config "
+        .. gcc_bin
+        .. " --dynamic-linker " .. linker_path
+        .. " --rpath " .. libdir
+        .. " --linker-type gnu"
+    )
 
     return true
 end
