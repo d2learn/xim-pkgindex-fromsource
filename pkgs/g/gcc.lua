@@ -34,6 +34,7 @@ package = {
                 "make", "gcc", "xz", "gzip", "bzip2",
                 "linux-headers@5.11.1", "glibc@2.39", 
                 "gcc-specs-config", "binutils@2.42",
+                "make@4.3",
             },
             ["latest"] = { ref = "15.1.0" },
             ["15.1.0"] = { url = __gcc_url("15.1.0") },
@@ -90,6 +91,7 @@ function install()
 
     log.info("3.build config...")
 
+    -- TODO: use workspace to build
     local old_glibc_info = xvm.info("glibc", "")
     local sysroot_dir = system.subos_sysrootdir()
 
