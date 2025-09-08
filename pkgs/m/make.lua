@@ -64,6 +64,8 @@ function install()
     os.setenv("CC", "musl-gcc-static")
     os.setenv("CXX", "musl-g++-static")
 
+    __patch_for_musl_gcc()
+
     system.exec(configure_file
         .. " --prefix=" .. make_prefix
         .. " --disable-nls" -- disable native language support
@@ -93,4 +95,41 @@ function uninstall()
     xvm.remove("make")
     xvm.remove("gmake")
     return true
+end
+
+-- private
+
+
+-- fix error: make's fnmatch.c: getenv issues (for musl-gcc)
+-- https://lists.gnu.org/archive/html/bug-make/2025-03/msg00033.html
+-- https://cgit.git.savannah.gnu.org/cgit/make.git/tree/gl/lib/fnmatch.c?h=4.4#n124
+function __patch_for_musl_gcc()
+    local lib_fnmatch_c = path.join("lib", "fnmatch.c")
+    local src_getopt_h = path.join("src", "getopt.h")
+
+    if not os.isfile(lib_fnmatch_c) then
+        lib_fnmatch_c = path.join("gl", "lib", "fnmatch.c")
+        return
+    end
+
+    if not os.isfile(lib_fnmatch_c) then
+        log.warn("patch fnmatch.c failed, file not found!")
+        return
+    end
+
+    local content_h = io.readfile(src_getopt_h)
+    local content_c = io.readfile(lib_fnmatch_c)
+    local old_getenv_str = "extern char *getenv ();"
+    local old_getopt_str = "extern int getopt ();"
+    local getenv_str = "extern char *getenv (const char *);"
+    local getopt_str = "extern int getopt (int, char * const *, const char *);"
+
+    log.info("patch fnmatch.c for musl-gcc...")
+    content_c = content_c:replace(old_getenv_str, getenv_str)
+
+    log.info("patch getopt.h for musl-gcc...")
+    content_h = content_h:replace(old_getopt_str, getopt_str)
+
+    io.writefile(lib_fnmatch_c, content_c)
+    io.writefile(src_getopt_h, content_h)
 end
