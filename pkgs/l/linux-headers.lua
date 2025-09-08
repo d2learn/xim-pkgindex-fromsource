@@ -8,7 +8,7 @@ package = {
 
     -- xim pkg info
     type = "package",
-    namespace = "scode",
+    namespace = "fromsource",
     archs = {"x86_64"},
     status = "stable", -- dev, stable, deprecated
 
