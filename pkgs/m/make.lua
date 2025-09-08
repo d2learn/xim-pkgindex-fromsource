@@ -64,7 +64,8 @@ function install()
     os.setenv("CC", "musl-gcc-static")
     os.setenv("CXX", "musl-g++-static")
 
-    __patch_for_musl_gcc()
+    log.warn("make build may fail with musl-gcc, patching...")
+    __patch_for_musl_gcc(scode_make_dir)
 
     system.exec(configure_file
         .. " --prefix=" .. make_prefix
@@ -103,33 +104,54 @@ end
 -- fix error: make's fnmatch.c: getenv issues (for musl-gcc)
 -- https://lists.gnu.org/archive/html/bug-make/2025-03/msg00033.html
 -- https://cgit.git.savannah.gnu.org/cgit/make.git/tree/gl/lib/fnmatch.c?h=4.4#n124
-function __patch_for_musl_gcc()
-    local lib_fnmatch_c = path.join("lib", "fnmatch.c")
-    local src_getopt_h = path.join("src", "getopt.h")
+function __patch_for_musl_gcc(scode_dir)
 
-    if not os.isfile(lib_fnmatch_c) then
-        lib_fnmatch_c = path.join("gl", "lib", "fnmatch.c")
+    local libdir = path.join(scode_dir, "lib")
+
+    if not os.isdir(libdir) then
+        libdir = path.join(scode_dir, "gl", "lib")
         return
     end
 
-    if not os.isfile(lib_fnmatch_c) then
-        log.warn("patch fnmatch.c failed, file not found!")
+    if not os.isdir(libdir) then
+        log.warn("patch failed, file not found!")
         return
     end
 
-    local content_h = io.readfile(src_getopt_h)
-    local content_c = io.readfile(lib_fnmatch_c)
+    local src_getopt_h = path.join(scode_dir, "src", "getopt.h")
+    local getenv_files = {
+        path.join(libdir, "fnmatch.c"),
+        path.join(libdir, "glob.c"),
+        path.join(scode_dir, "src", "getopt.c"),
+    }
+
     local old_getenv_str = "extern char *getenv ();"
     local old_getopt_str = "extern int getopt ();"
     local getenv_str = "extern char *getenv (const char *);"
     local getopt_str = "extern int getopt (int, char * const *, const char *);"
 
-    log.info("patch fnmatch.c for musl-gcc...")
-    content_c = content_c:replace(old_getenv_str, getenv_str)
+    for _, f in ipairs(getenv_files) do
+        if not os.isfile(f) then
+            log.warn("patch failed, file not found: " .. f)
+        else
+            local content = io.readfile(f)
+            if content:find(old_getenv_str, 1, true) then
+                log.info("patch " .. f .. " for musl-gcc...")
+                content = content:replace(old_getenv_str, getenv_str, { plain = true })
+                io.writefile(f, content)
+            end
+        end
+    end
+
+    local content_h = io.readfile(src_getopt_h)
 
     log.info("patch getopt.h for musl-gcc...")
-    content_h = content_h:replace(old_getopt_str, getopt_str)
+    content_h = content_h:replace(old_getopt_str, getopt_str, { plain = true })
 
-    io.writefile(lib_fnmatch_c, content_c)
     io.writefile(src_getopt_h, content_h)
+
+    log.info("patch fnmatch.c/getopt.h/... done.")
+
+    os.sleep(3000)
+
 end
