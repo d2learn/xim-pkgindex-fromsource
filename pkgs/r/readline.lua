@@ -1,7 +1,7 @@
 package = {
     homepage = "https://tiswww.case.edu/php/chet/readline/rltop.html",
 
-    name = "libreadline",
+    name = "readline",
     description = "GNU Readline Library for Command-line Editing",
 
     authors = "Chet Ramey",
@@ -31,6 +31,7 @@ import("xim.libxpkg.system")
 import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
+import("xim.libxpkg.utils")
 
 local libs = {
     "libreadline.so",
@@ -45,15 +46,30 @@ local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include/rea
 
 function install()
     local xpkg = package.name .. "@" .. pkginfo.version()
+    local src_dir = path.absolute("readline-" .. pkginfo.version())
+
     os.tryrm(pkginfo.install_dir())
+    os.tryrm(src_dir)
+
+    pkgmanager.install("scode:" .. xpkg)
+    system.exec(string.format("xpkg-helper scode:%s --export-path %s", xpkg, src_dir))
+
+    __patch_for_readline(src_dir)
+
+    -- TODO: add rpath for shared libraries?
+    -- https://stackoverflow.com/questions/46881581/libreadline-so-7-undefined-symbol-up
+    os.setenv("LDFLAGS", "-Wl,-rpath,/home/xlings/.xlings_data/subos/linux/lib")
     system.exec("configure-project-installer " .. pkginfo.install_dir()
-        .. " --xpkg-scode " .. xpkg)
+        .. " --project-dir " .. src_dir
+        .. " --args " .. [[ "--enable-shared --with-shared-termcap-library" ]]
+    )
+
     return os.isdir(pkginfo.install_dir())
 end
 
 function config()
-    local version_tag = "libreadline-binding-tree@" .. pkginfo.version()
-    xvm.add("libreadline-binding-tree")
+    local version_tag = "readline-binding-tree@" .. pkginfo.version()
+    xvm.add("readline-binding-tree")
 
     log.warn("add libs...")
     local config = {
@@ -74,13 +90,13 @@ function config()
     local hdr_dir = path.join(pkginfo.install_dir(), "include", "readline")
     os.cp(hdr_dir, sys_usr_includedir)
 
-    xvm.add("libreadline", { binding = version_tag })
+    xvm.add("readline", { binding = version_tag })
 
     return true
 end
 
 function uninstall()
-    xvm.remove("libreadline")
+    xvm.remove("readline")
 
     for _, lib in ipairs(libs) do
         xvm.remove(lib, "readline-" .. pkginfo.version())
@@ -88,7 +104,25 @@ function uninstall()
 
     os.tryrm(path.join(sys_usr_includedir, "readline"))
 
-    xvm.remove("libreadline-binding-tree")
+    xvm.remove("readline-binding-tree")
 
     return true
+end
+
+-- private
+-- fix build python crash coredump issue
+function __patch_for_readline(src_dir)
+    local patch_url_template = "https://ftpmirror.gnu.org/gnu/readline/readline-8.2-patches/readline82-" -- XX.patch
+    os.cd(src_dir)
+    -- from 001 -> 013
+    for i = 1, 13 do
+        local patch_num = string.format("%03d", i)
+        local patch_url = patch_url_template .. patch_num
+        local patch_file = "readline82-" .. patch_num -- .. ".patch"
+        log.warn("[%02d/13] - download patch: %s", i, patch_url)
+        utils.try_download_and_check(patch_url, src_dir)
+        --os.trymv("readline82-" .. patch_num, patch_file)
+        log.warn("apply patch: " .. patch_file)
+        system.exec("patch -p0 -i " .. patch_file)
+    end
 end
