@@ -44,24 +44,11 @@ local libs = {
 local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
 
 function install()
-
-    local zlib_scode_xpkg = "scode:zlib@" .. pkginfo.version()
-    local zlibdir = path.absolute("zlib-" .. pkginfo.version())
-
-    pkgmanager.install(zlib_scode_xpkg)
-
-    os.tryrm(zlibdir)
-    system.exec("xpkg-helper " .. zlib_scode_xpkg
-        .. " --export-path " .. zlibdir
-    )
-
-    log.warn("Building zlib from source, this may take a while...")
-
-    os.cd(zlibdir)
-    system.exec("./configure --prefix=" .. pkginfo.install_dir())
-    system.exec("make -j20")
-    system.exec("make install")
-    return true
+    local xpkg = package.name .. "@" .. pkginfo.version()
+    os.tryrm(pkginfo.install_dir())
+    system.exec("configure-project-installer " .. pkginfo.install_dir()
+    .. " --xpkg-scode " .. xpkg)
+    return os.isdir(pkginfo.install_dir())
 end
 
 function config()
