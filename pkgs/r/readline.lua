@@ -19,7 +19,11 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make@4.3", "configure-project-installer" },
+            deps = {
+                "xpkg-helper", "gcc", "make@4.3",
+                "configure-project-installer",
+                "ncurses@6.4", -- for shared termcap library
+            },
             ["latest"] = { ref = "8.2" },
             ["8.2"] = {},
         },
