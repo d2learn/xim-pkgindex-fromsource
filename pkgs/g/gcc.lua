@@ -61,6 +61,8 @@ local gcc_lib = {
     -- not include glibc
     "libgcc_s.so", "libgcc_s.so.1",
     "libstdc++.so", "libstdc++.so.6",
+    -- asan
+    "libasan.so", "libasan.so.8",
 }
 
 function install()
@@ -123,7 +125,8 @@ function install()
         .. " --disable-lto" -- (--enable-lto) TODO: liblto_plugin.so -> libc.so.6 version mismatch
         .. " --enable-threads=posix"
         .. " --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu"
-        .. " --disable-libsanitizer" -- sanitizer_platform_limits_posix.cc multiple definition of ‘enum fsconfig_command’
+        .. " --enable-libsanitizer"
+        --.. " --disable-libsanitizer" -- sanitizer_platform_limits_posix.cc multiple definition of ‘enum fsconfig_command’
     , path.join(sourcedir, "configure"), pkginfo.install_dir()))
 
 
