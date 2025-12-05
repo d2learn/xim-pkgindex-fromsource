@@ -97,11 +97,16 @@ end
 function config()
     log.info("Adding bzip2 libraries...")
     local libdir = path.join(pkginfo.install_dir(), "lib")
-    
+    local bindir = path.join(pkginfo.install_dir(), "bin")
+    local binding_tree_root = string.format("bzip2@%s", pkginfo.version())
+
+    xvm.add("bzip2", { bindir = bindir })
+
     local config = {
         type = "lib",
         version = "bzip2-" .. pkginfo.version(),
         bindir = libdir,
+        binding = binding_tree_root,
     }
     
     for _, lib in ipairs(bzip2_libs()) do
@@ -111,7 +116,6 @@ function config()
     end
     
     log.info("Adding programs...")
-    local bindir = path.join(pkginfo.install_dir(), "bin")
     if os.isdir(bindir) then
         for _, prog in ipairs(package.programs) do
             local prog_path = path.join(bindir, prog)
@@ -120,8 +124,7 @@ function config()
                     type = "bin",
                     version = "bzip2-" .. pkginfo.version(),
                     bindir = bindir,
-                    alias = prog,
-                    filename = prog,
+                    binding = binding_tree_root,
                 })
             end
         end
@@ -144,7 +147,6 @@ function config()
         os.cp(lib, sys_usr_libdir, { force = true })
     end
     
-    xvm.add("bzip2")
     return true
 end
 
