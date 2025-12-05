@@ -80,7 +80,9 @@ function install()
     -- Use ncurses instead of termcap (modern ncurses removed termcap compat)
     system.exec("configure-project-installer " .. pkginfo.install_dir()
         .. " --project-dir " .. src_dir
-        .. " --args " .. [[ "--enable-shared --with-curses" ]]
+        -- " --args " .. [[ "--enable-shared --with-curses" ]]
+        -- undefined-symbol-up - xmake
+        .. " --args " .. [[ "--enable-shared --with-shared-termcap-library" ]]
     )
 
     return os.isdir(pkginfo.install_dir())
