@@ -29,7 +29,7 @@ package = {
                 "util-linux@2.39.3", -- for libuuid
                 "openssl@3.1.5", -- for ssl
                 "ncurses@6.4", -- for libtinfo
-                "bzip2@1.0.8", -- for bz2
+                "fromsource:bzip2@1.0.8", -- for bz2
                 "zlib@1.3.1", -- for zlib needed by binascii
                 -- TODO: bzip2, gdbm, qlite3, tk/tkinter
             },
@@ -86,6 +86,9 @@ function config()
         version = "python-" .. pkginfo.version(),
         envs = {
             TZDIR = "/usr/share/zoneinfo",
+            -- python manim-test.py (need LD_LIBRARY_PATH to xlings subos lib)
+            -- ImportError: libstdc++.so.6: cannot open shared object file: No such file or directory
+            LD_LIBRARY_PATH = path.join(system.subos_sysrootdir(), "lib"),
         }
     }
 

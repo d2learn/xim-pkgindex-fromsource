@@ -23,6 +23,7 @@ package = {
                 "xpkg-helper", "gcc", "make@4.3",
                 "configure-project-installer",
                 "ncurses@6.4", -- for shared termcap library
+                "gcc@11", -- readline 8.2 requires at least gcc 11, but < 15
             },
             ["latest"] = { ref = "8.2" },
             ["8.2"] = {},
@@ -37,16 +38,28 @@ import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 import("xim.libxpkg.utils")
 
-local libs = {
-    "libreadline.so",
-    "libreadline.so.8",
-    "libreadline.a",
-    "libhistory.so",
-    "libhistory.so.8",
-    "libhistory.a",
-}
+local function readline_libs()
+    local libdir = path.join(pkginfo.install_dir(), "lib")
+    local out = {}
+    
+    -- Scan for all libreadline*.so* and libhistory*.so* files
+    for _, file in ipairs(os.files(path.join(libdir, "libreadline*.so*"))) do
+        local name = path.filename(file)
+        table.insert(out, name)
+    end
+    for _, file in ipairs(os.files(path.join(libdir, "libhistory*.so*"))) do
+        local name = path.filename(file)
+        table.insert(out, name)
+    end
+    
+    -- Add static libraries
+    table.insert(out, "libreadline.a")
+    table.insert(out, "libhistory.a")
+    
+    return out
+end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include/readline")
+local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
 
 function install()
     local xpkg = package.name .. "@" .. pkginfo.version()
@@ -63,9 +76,11 @@ function install()
     -- TODO: add rpath for shared libraries?
     -- https://stackoverflow.com/questions/46881581/libreadline-so-7-undefined-symbol-up
     os.setenv("LDFLAGS", "-Wl,-rpath,/home/xlings/.xlings_data/subos/linux/lib")
+    
+    -- Use ncurses instead of termcap (modern ncurses removed termcap compat)
     system.exec("configure-project-installer " .. pkginfo.install_dir()
         .. " --project-dir " .. src_dir
-        .. " --args " .. [[ "--enable-shared --with-shared-termcap-library" ]]
+        .. " --args " .. [[ "--enable-shared --with-curses" ]]
     )
 
     return os.isdir(pkginfo.install_dir())
@@ -76,23 +91,36 @@ function config()
     xvm.add("readline-binding-tree")
 
     log.warn("add libs...")
+    local libdir = path.join(pkginfo.install_dir(), "lib")
     local config = {
         type = "lib",
         version = "readline-" .. pkginfo.version(),
-        bindir = path.join(pkginfo.install_dir(), "lib"),
+        bindir = libdir,
         binding = version_tag,
     }
 
-    for _, lib in ipairs(libs) do
+    for _, lib in ipairs(readline_libs()) do
         config.alias = lib
         config.filename = lib
         xvm.add(lib, config)
     end
 
     log.warn("add header files to sysroot...")
-
     local hdr_dir = path.join(pkginfo.install_dir(), "include", "readline")
-    os.cp(hdr_dir, sys_usr_includedir)
+    local sys_readline_includedir = path.join(sys_usr_includedir, "readline")
+    os.mkdir(sys_usr_includedir)
+    os.cp(hdr_dir, sys_readline_includedir, { force = true })
+
+    -- Copy pkgconfig files
+    log.warn("add pkgconfig files to sysroot...")
+    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    os.mkdir(sys_pc_dir)
+    local pc_dir = path.join(pkginfo.install_dir(), "lib/pkgconfig")
+    if os.isdir(pc_dir) then
+        for _, pc in ipairs(os.files(path.join(pc_dir, "*.pc"))) do
+            os.cp(pc, sys_pc_dir)
+        end
+    end
 
     xvm.add("readline", { binding = version_tag })
 
@@ -102,11 +130,20 @@ end
 function uninstall()
     xvm.remove("readline")
 
-    for _, lib in ipairs(libs) do
+    for _, lib in ipairs(readline_libs()) do
         xvm.remove(lib, "readline-" .. pkginfo.version())
     end
 
     os.tryrm(path.join(sys_usr_includedir, "readline"))
+
+    -- Remove pkgconfig files
+    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "readline*.pc"))) do
+        os.tryrm(pc)
+    end
+    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "history*.pc"))) do
+        os.tryrm(pc)
+    end
 
     xvm.remove("readline-binding-tree")
 
