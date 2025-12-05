@@ -81,8 +81,8 @@ function install()
     system.exec("configure-project-installer " .. pkginfo.install_dir()
         .. " --project-dir " .. src_dir
         -- " --args " .. [[ "--enable-shared --with-curses" ]]
-        -- undefined-symbol-up - xmake
-        .. " --args " .. [[ "--enable-shared --with-shared-termcap-library" ]]
+        -- undefined-symbol-up - xmake + glib
+        .. " --args " .. [[ "--enable-shared --with-shared-termcap-library --with-curses" ]]
     )
 
     return os.isdir(pkginfo.install_dir())
