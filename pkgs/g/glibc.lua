@@ -77,6 +77,11 @@ local glibc_libs = {
     "libnss_hesiod.so.2",
     "libnss_db.so",
     "libnss_db.so.2",
+
+    -- rust-lld: error: unable to find library -lrt
+    "Scrt1.o",
+    "libutil.a", "libutil.so.1",
+    "librt.a", "librt.so.1",
 }
 
 function install()
