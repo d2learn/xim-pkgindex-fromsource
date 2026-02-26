@@ -3,6 +3,8 @@ function __libx11_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.x.org/wiki/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "xorgproto", "xtrans", "libxcb" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorgproto@2024.1", "xtrans@1.5.2", "libxcb@1.17.0" },
             ["latest"] = { ref = "1.8.10" },
             ["1.8.10"] = {
                 url = {

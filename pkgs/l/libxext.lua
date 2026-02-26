@@ -3,6 +3,8 @@ function __libxext_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.x.org/wiki/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "xorgproto", "xorg-macros", "libx11" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorgproto@2024.1", "xorg-macros@1.20.1", "libx11@1.8.10" },
             ["latest"] = { ref = "1.3.6" },
             ["1.3.6"] = {
                 url = {

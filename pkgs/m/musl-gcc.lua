@@ -1,6 +1,7 @@
 -- https://mirrors.tuna.tsinghua.edu.cn/gnu/gcc/
 
 package = {
+    spec = "1",
 
     homepage = "https://musl.libc.org",
 
@@ -33,7 +34,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "musl-cross-make" },
+            deps = { "musl-cross-make@0.0.1" },
             ["latest"] = { ref = "15.1.0" },
             ["15.1.0"] = {  },
             ["13.3.0"] = {  },

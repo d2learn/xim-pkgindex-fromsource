@@ -1,6 +1,8 @@
 function _linux_download_url(version) return "https://www.python.org/ftp/python/" .. version .. "/Python-" .. version .. ".tar.xz" end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.python.org",
     name = "python",
     description = "The Python programming language",
@@ -24,7 +26,7 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "gcc", "make@4.3", "configure-project-installer",
+                "gcc@15.1.0", "make@4.3", "configure-project-installer@0.0.1",
                 "xz-utils@5.4.5", "libffi@3.4.4", "readline@8.2",
                 "util-linux@2.39.3", -- for libuuid
                 "openssl@3.1.5", -- for ssl

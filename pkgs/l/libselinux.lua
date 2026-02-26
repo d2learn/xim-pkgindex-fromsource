@@ -3,6 +3,8 @@ function __libselinux_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://github.com/SELinuxProject/selinux",
 
     -- base info
@@ -29,7 +31,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
             ["latest"] = { ref = "3.5" },
             ["3.5"] = {
                 url = {

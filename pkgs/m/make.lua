@@ -2,6 +2,8 @@ function __make_url(version) return format("https://ftp.wayne.edu/gnu/make/make-
 function __make_mirror_url(version) return format("https://ftpmirror.gnu.org/gnu/make/make-%s.tar.gz", version) end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.gnu.org/software/make",
     -- base info
     name = "make",
@@ -28,7 +30,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "musl-gcc" },
+            deps = { "make@4.3", "musl-gcc@15.1.0" },
             ["latest"] = { ref = "4.3" },
             ["4.3"] = {
                 url = {

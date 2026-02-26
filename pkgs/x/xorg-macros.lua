@@ -3,6 +3,8 @@ function __xorg_macros_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.x.org/wiki/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
             ["latest"] = { ref = "1.20.1" },
             ["1.20.1"] = {
                 url = {

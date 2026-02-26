@@ -3,6 +3,8 @@ function __freetype_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.freetype.org",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "meson", "ninja", "libpng", "zlib" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1", "libpng@1.6.43", "zlib@1.3.1" },
             ["latest"] = { ref = "2.13.2" },
             ["2.13.2"] = {
                 url = {

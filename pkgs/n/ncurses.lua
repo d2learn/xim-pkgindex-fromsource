@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://invisible-island.net/ncurses/",
     name = "ncurses",
     description = "The New Curses library: terminal UI support for character-cell displays",
@@ -22,7 +24,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "configure-project-installer" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "configure-project-installer@0.0.1" },
             ["latest"] = { ref = "6.4" },
             ["6.4"] = {},
         },

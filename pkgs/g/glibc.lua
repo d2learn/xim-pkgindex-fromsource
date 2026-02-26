@@ -2,6 +2,8 @@ function __glic_url(version) return format("http://ftp.gnu.org/gnu/libc/glibc-%s
 function __glic_mirror_url(version) return format("https://ftpmirror.gnu.org/libc/glibc-%s.tar.xz", version) end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.gnu.org/software/libc",
     -- base info
     name = "glibc",
@@ -33,7 +35,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "gcc", "linux-headers@5.11.1", "binutils@2.42" },
+            deps = { "make@4.3", "gcc@15.1.0", "linux-headers@5.11.1", "binutils@2.42" },
             ["latest"] = { ref = "2.39" },
             ["2.39"] = {
                     url = {

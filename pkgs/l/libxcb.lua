@@ -3,6 +3,8 @@ function __libxcb_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://xcb.freedesktop.org/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "xorgproto", "libxau", "libxdmcp", "xcb-proto" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorgproto@2024.1", "libxau@1.0.11", "libxdmcp@1.1.5", "xcb-proto@1.17.0" },
             ["latest"] = { ref = "1.17.0" },
             ["1.17.0"] = {
                 url = {

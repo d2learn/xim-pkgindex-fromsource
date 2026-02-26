@@ -3,6 +3,8 @@ function __libfribidi_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://fribidi.org/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "meson", "ninja" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1" },
             ["latest"] = { ref = "1.0.13" },
             ["1.0.13"] = {
                 url = {

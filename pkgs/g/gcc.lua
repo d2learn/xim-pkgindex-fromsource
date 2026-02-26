@@ -1,6 +1,8 @@
 function __gcc_url(version) return format("https://ftpmirror.gnu.org/gnu/gcc/gcc-%s/gcc-%s.tar.xz", version, version) end
 
 package = {
+    spec = "1",
+
     -- base info
     name = "gcc",
     description = "GCC, the GNU Compiler Collection",
@@ -31,10 +33,9 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "make", "gcc", "xz", "gzip", "bzip2",
+                "make@4.3", "gcc@15.1.0", "xz@5.4.5", "gzip@1.13", "bzip2@1.0.8",
                 "linux-headers@5.11.1", "glibc@2.39", 
-                "gcc-specs-config", "binutils@2.42",
-                "make@4.3",
+                "gcc-specs-config@0.0.1", "binutils@2.42",
             },
             ["latest"] = { ref = "15.1.0" },
             ["15.1.0"] = { url = __gcc_url("15.1.0") },
