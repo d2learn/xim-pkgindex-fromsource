@@ -1,0 +1,54 @@
+name: pkgindex test
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'pkgs/**'
+
+jobs:
+
+  linux-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Installation Xlings on Ubuntu
+        run: |
+          export XLINGS_NON_INTERACTIVE=1
+          curl -fsSL https://raw.githubusercontent.com/d2learn/xlings/main/tools/other/quick_install.sh | bash
+          echo "XLINGS_HOME=$HOME/.xlings" >> "$GITHUB_ENV"
+          echo "PATH=$HOME/.xlings/subos/current/bin:$HOME/.xlings/bin:$PATH" >> "$GITHUB_ENV"
+
+      - name: Lint xpkg libpath policy
+        run: |
+          chmod +x .github/scripts/check-no-direct-ld-libpath.sh
+          .github/scripts/check-no-direct-ld-libpath.sh
+
+      - name: Get changed-files
+        uses: tj-actions/changed-files@v46
+        id: changed-files
+        with:
+          path: pkgs/
+
+      - name: Package File Test
+        run: |
+          source ~/.bashrc
+          export PATH=/home/xlings/.xlings_data/bin:$PATH
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            echo "---"
+            xpkg_file="${{ github.workspace }}/pkgs/$file"
+            if grep -qP '^\s*package\s*=\s*\{.*\bref\s*=' "$xpkg_file"; then
+              echo "⏩ Skip ref package: $file"
+              continue
+            fi
+            output=$(xim --add-xpkg "$xpkg_file" 2>&1)
+            echo "$output"
+            if echo "$output" | grep -i "error"; then
+              echo "❌ Error detected in $file"
+              exit 1
+            fi
+          done

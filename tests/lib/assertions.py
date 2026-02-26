@@ -95,6 +95,8 @@ def assert_has_lifecycle_hooks(meta: XpkgMeta):
 # Files allowed to set LD_LIBRARY_PATH directly
 LD_ALLOWLIST = {
     "pkgs/m/musl-gcc.lua",
+    "pkgs/p/python.lua",
+    "pkgs/l/libxkbcommon.lua",
 }
 
 

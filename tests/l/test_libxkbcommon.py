@@ -73,7 +73,6 @@ class TestIsolation:
         assert_no_direct_path_modification(PKG_FILE)
 
     @pytest.mark.isolation
-    @pytest.mark.xfail(reason="libxkbcommon 当前使用 LD_LIBRARY_PATH, 待迁移到 elfpatch RPATH")
     def test_no_direct_ld_libpath(self):
         assert_no_direct_ld_libpath(PKG_FILE)
 
