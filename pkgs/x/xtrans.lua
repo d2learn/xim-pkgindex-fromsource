@@ -3,6 +3,8 @@ function __xtrans_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.x.org/wiki/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "xorg-macros" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorg-macros@1.20.1" },
             ["latest"] = { ref = "1.5.2" },
             ["1.5.2"] = {
                 url = __xtrans_url("1.5.2"),

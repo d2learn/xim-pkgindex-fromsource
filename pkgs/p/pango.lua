@@ -5,6 +5,8 @@ function __pango_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://gitlab.gnome.org/GNOME/pango",
 
     -- base info
@@ -36,8 +38,8 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper", "gcc", "make", "meson", "ninja",
-                "harfbuzz", "freetype", "fontconfig", "cairo", "gcc@11",
+                "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1",
+                "harfbuzz@8.3.0", "freetype@2.13.2", "fontconfig@2.14.2", "cairo@1.18.0", "gcc@11.5.0",
             },
             ["latest"] = { ref = "1.57.0" },
             ["1.57.0"] = {

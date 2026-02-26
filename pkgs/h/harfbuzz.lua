@@ -4,6 +4,8 @@ function __harfbuzz_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://harfbuzz.github.io",
 
     -- base info
@@ -32,7 +34,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "meson", "ninja", "freetype" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1", "freetype@2.13.2" },
             ["latest"] = { ref = "8.3.0" },
             ["8.3.0"] = {
                 url = {

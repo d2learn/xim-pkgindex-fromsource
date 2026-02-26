@@ -3,6 +3,8 @@ function __bzip2_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://sourceware.org/bzip2/",
 
     -- base info
@@ -33,7 +35,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
             ["latest"] = { ref = "1.0.8" },
             ["1.0.8"] = {
                 url = {

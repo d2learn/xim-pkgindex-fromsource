@@ -3,6 +3,8 @@ function __alsa_lib_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.alsa-project.org/",
 
     -- base info
@@ -29,7 +31,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
             ["latest"] = { ref = "1.2.12" },
             ["1.2.12"] = {
                 url = __alsa_lib_url("1.2.12"),

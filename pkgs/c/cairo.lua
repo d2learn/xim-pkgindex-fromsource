@@ -3,6 +3,8 @@ function __cairo_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://cairographics.org",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "ninja", "freetype", "fontconfig", "libpng", "pixman" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "ninja@1.12.1", "freetype@2.13.2", "fontconfig@2.14.2", "libpng@1.6.43", "pixman@0.42.2" },
             ["latest"] = { ref = "1.18.0" },
             ["1.18.0"] = {
                 url = {

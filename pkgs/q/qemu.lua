@@ -1,6 +1,8 @@
 function qemu_url(version) return "https://download.qemu.org/qemu-" .. version .. ".tar.xz" end
 
 package = {
+    spec = "1",
+
     homepage = "www.qemu.org",
 
     -- base info
@@ -30,7 +32,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "ninja", "gcc" },
+            deps = { "make@4.3", "ninja@1.12.1", "gcc@15.1.0" },
             ["latest"] = { ref = "10.1.0" },
             ["10.1.0"] = { url = qemu_url("10.1.0") },
             ["9.2.4"] = { url = qemu_url("9.2.4") },

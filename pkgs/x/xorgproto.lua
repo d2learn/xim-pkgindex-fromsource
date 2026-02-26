@@ -3,6 +3,8 @@ function __xorgproto_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.x.org/wiki/",
 
     -- base info
@@ -31,7 +33,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "meson", "ninja" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1" },
             ["latest"] = { ref = "2024.1" },
             ["2024.1"] = {
                 url = {

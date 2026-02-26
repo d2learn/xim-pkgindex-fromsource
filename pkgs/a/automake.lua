@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     name = "automake",
     description = "A tool for automatically generating Makefile.in files",
     homepage = "https://www.gnu.org/software/automake/",
@@ -18,7 +20,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "configure-project-installer" },
+            deps = { "configure-project-installer@0.0.1" },
             ["latest"] = { ref = "1.16.5" },
             ["1.16.5"] = { },
         },

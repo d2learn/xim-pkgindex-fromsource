@@ -4,6 +4,8 @@ function __glib_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://wiki.gnome.org/Projects/GLib",
 
     -- base info
@@ -40,8 +42,8 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper", "gcc", -- gcc > 11 (gcc15 is ok)
-                "make", "meson", "ninja", "python", "libffi", "zlib", "pcre2"
+                "xpkg-helper@0.0.1", "gcc@15.1.0", -- gcc > 11 (gcc15 is ok)
+                "make@4.3", "meson@1.9.1", "ninja@1.12.1", "python@3.13.1", "libffi@3.4.4", "zlib@1.3.1", "pcre2@10.42"
             },
             ["latest"] = { ref = "2.82.2" },
             ["2.82.2"] = {

@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/",
     name = "util-linux",
     description = "A large collection of essential low-level system utilities for Linux",
@@ -30,8 +32,8 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper", "gcc", "make",
-                "configure-project-installer",
+                "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3",
+                "configure-project-installer@0.0.1",
                 "linux-headers@5.11.1",
                 "ncurses@6.4", -- for libtinfo
             },

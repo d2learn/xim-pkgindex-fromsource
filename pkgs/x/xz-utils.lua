@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://tukaani.org/xz/",
 
     name = "xz-utils",
@@ -20,7 +22,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make@4.3", "configure-project-installer" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "configure-project-installer@0.0.1" },
             ["latest"] = { ref = "5.4.5" },
             ["5.4.5"] = {},
         },

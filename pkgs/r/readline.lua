@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://tiswww.case.edu/php/chet/readline/rltop.html",
 
     name = "readline",
@@ -20,10 +22,10 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper", "gcc", "make@4.3",
-                "configure-project-installer",
+                "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3",
+                "configure-project-installer@0.0.1",
                 "ncurses@6.4", -- for shared termcap library
-                "gcc@11", -- readline 8.2 requires at least gcc 11, but < 15
+                "gcc@11.5.0", -- readline 8.2 requires at least gcc 11, but < 15
             },
             ["latest"] = { ref = "8.2" },
             ["8.2"] = {},

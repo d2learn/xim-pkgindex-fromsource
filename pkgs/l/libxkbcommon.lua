@@ -3,6 +3,8 @@ function __libxkbcommon_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://xkbcommon.org/",
 
     -- base info
@@ -30,8 +32,8 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper", "gcc", "make", "meson", "ninja",
-                "libx11", "libxcb", "bison", "libxml2@latest"
+                "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1",
+                "libx11@1.8.10", "libxcb@1.17.0", "bison@3.8.2", "libxml2@2.15.0"
             },
             ["latest"] = { ref = "1.13.1" },
             ["1.13.1"] = {

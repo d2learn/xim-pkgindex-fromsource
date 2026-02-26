@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://zlib.net",
 
     -- base info
@@ -22,7 +24,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make@4.3" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
             ["latest"] = { ref = "1.3.1" },
             ["1.3.1"] = { },
         },

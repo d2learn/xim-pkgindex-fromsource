@@ -2,6 +2,8 @@ function __glic_url(version) return format("https://ftp.gnu.org/gnu/binutils/bin
 function __glic_mirror_url(version) return format("https://ftpmirror.gnu.org/gnu/binutils/binutils-%s.tar.xz", version) end
 
 package = {
+    spec = "1",
+
     homepage = "https://www.gnu.org/software/binutils",
     -- base info
     name = "binutils",
@@ -33,7 +35,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make", "gcc", "glibc" },
+            deps = { "make@4.3", "gcc@15.1.0", "glibc@2.39" },
             ["latest"] = { ref = "2.42" },
             ["2.42"] = {
                 url = {

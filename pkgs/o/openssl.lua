@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://www.openssl.org",
     name = "openssl",
     description = "TLS/SSL and cryptography toolkit",
@@ -20,7 +22,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "configure-project-installer", "glibc" },
+            deps = { "configure-project-installer@0.0.1", "glibc@2.39" },
             ["latest"] = { ref = "3.1.5" },
             ["3.1.5"] = { },
         },

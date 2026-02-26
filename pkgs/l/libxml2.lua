@@ -1,4 +1,6 @@
 package = {
+    spec = "1",
+
     homepage = "https://gitlab.gnome.org/GNOME/libxml2",
 
     -- base info
@@ -29,7 +31,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "gcc", "make", "zlib" },
+            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "zlib@1.3.1" },
             ["latest"] = { ref = "2.15.0" },
             ["2.15.0"] = {
                 url = "https://github.com/GNOME/libxml2/archive/refs/tags/v2.15.0.tar.gz",

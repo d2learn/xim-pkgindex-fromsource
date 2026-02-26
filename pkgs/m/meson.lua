@@ -4,6 +4,8 @@ function __meson_url(version)
 end
 
 package = {
+    spec = "1",
+
     homepage = "https://mesonbuild.com",
 
     -- base info
@@ -32,7 +34,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper", "python" },
+            deps = { "xpkg-helper@0.0.1", "python@3.13.1" },
             ["latest"] = { ref = "1.9.1" },
             ["1.9.1"] = {
                 url = {
