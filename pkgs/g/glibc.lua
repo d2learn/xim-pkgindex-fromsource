@@ -35,7 +35,12 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make@4.3", "gcc@15.1.0", "linux-headers@5.11.1", "binutils@2.42" },
+            deps = {
+                "xim:make@4.3",
+                "xim:gcc@15.1.0",
+                "xim:linux-headers@5.11.1",
+                "xim:binutils@2.42",
+            },
             ["latest"] = { ref = "2.39" },
             ["2.39"] = {
                     url = {
@@ -114,7 +119,7 @@ function install()
     )
 
     log.info("4.Building glibc...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("5.Installing glibc...")
     -- TODO: use make install DESTDIR=$SYSROOT to avoid prefix hardcoding path in some files (libc.so)
