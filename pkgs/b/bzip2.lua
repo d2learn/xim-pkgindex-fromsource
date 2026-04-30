@@ -35,7 +35,11 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "1.0.8" },
             ["1.0.8"] = {
                 url = {
@@ -77,22 +81,21 @@ local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
 function install()
     local scode_dir = path.absolute("bzip2-" .. pkginfo.version())
     local prefix = pkginfo.install_dir()
-    
+    local jobs = os.cpuinfo("ncpu") or 4
+
     log.info("1.Building bzip2...")
     os.cd(scode_dir)
-    
-    local make_cmd = "make -j24 install"
-        .. " DESTDIR=" .. prefix
-        .. " PREFIX=" .. prefix
-        .. " CFLAGS=\"-fPIC -O2\""
-    
-    system.exec(make_cmd)
-    
+
+    system.exec(string.format(
+        "make -j%d install DESTDIR=%s PREFIX=%s CFLAGS=\"-fPIC -O2\"",
+        jobs, prefix, prefix
+    ))
+
     -- Also build shared library
     log.info("2.Building shared library...")
-    system.exec("make -j24 -f Makefile-libbz2_so")
+    system.exec(string.format("make -j%d -f Makefile-libbz2_so", jobs))
     os.cp("libbz2.so*", path.join(prefix, "lib"))
-    
+
     return os.isdir(pkginfo.install_dir())
 end
 
