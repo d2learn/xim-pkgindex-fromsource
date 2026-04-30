@@ -31,7 +31,12 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "zlib@1.3.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "fromsource:zlib@1.3.1",
+            },
             ["latest"] = { ref = "2.15.0" },
             ["2.15.0"] = {
                 url = "https://github.com/GNOME/libxml2/archive/refs/tags/v2.15.0.tar.gz",
@@ -93,7 +98,7 @@ function install()
     )
 
     log.info("3.Building libxml2...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing libxml2...")
     system.exec("make install")
