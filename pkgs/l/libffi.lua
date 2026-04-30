@@ -21,7 +21,12 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "configure-project-installer@0.0.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:configure-project-installer@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "3.4.4" },
             ["3.4.4"] = {},
         },
