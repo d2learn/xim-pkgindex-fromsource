@@ -31,6 +31,9 @@ class XlingsClient:
 
     @staticmethod
     def xim_add_xpkg(lua_path: str) -> tuple[bool, str]:
-        code, out = _run_xlings(f"xim --add-xpkg {lua_path}", timeout=15)
+        # xlings ≥0.4 split `xim --add-xpkg` out into `xlings config --add-xpkg`.
+        # Method name kept (`xim_add_xpkg`) for backward compatibility with
+        # existing tests/assertions; the underlying command is the new one.
+        code, out = _run_xlings(f"xlings config --add-xpkg {lua_path}", timeout=15)
         has_error = "error" in out.lower() and "please report" not in out.lower()
         return code == 0 and not has_error, out
