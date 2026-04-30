@@ -33,9 +33,16 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "make@4.3", "gcc@15.1.0", "xz@5.4.5", "gzip@1.13", "bzip2@1.0.8",
-                "linux-headers@5.11.1", "glibc@2.39", 
-                "gcc-specs-config@0.0.1", "binutils@2.42",
+                "xim:make@4.3",
+                "xim:gcc@15.1.0",                   -- bootstrap gcc (use prebuilt to compile new gcc)
+                "xim:linux-headers@5.11.1",
+                "xim:glibc@2.39",
+                "xim:binutils@2.42",
+                "xim:gcc-specs-config@0.0.1",
+                "fromsource:bzip2@1.0.8",
+                "fromsource:xz-utils@5.4.5",        -- fix: was 'xz' (wrong package name)
+                -- gzip dropped: no gzip xpkg in any registered indexrepo;
+                -- system tar handles .gz extraction. TODO: package gzip later.
             },
             ["latest"] = { ref = "15.1.0" },
             ["15.1.0"] = { url = __gcc_url("15.1.0") },
@@ -133,7 +140,7 @@ function install()
 
 
     log.info("4.build gcc...")
-    system.exec("time make -j24", { retry = 3 })
+    system.exec("time " .. string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
 
     log.info("5.install gcc...")
     system.exec("make install")
