@@ -33,7 +33,14 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorgproto@2024.1", "xtrans@1.5.2", "libxcb@1.17.0" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "fromsource:xorgproto@2024.1",
+                "fromsource:xtrans@1.5.2",
+                "fromsource:libxcb@1.17.0",
+            },
             ["latest"] = { ref = "1.8.10" },
             ["1.8.10"] = {
                 url = {
@@ -95,7 +102,7 @@ function install()
     )
 
     log.info("3.Building libx11...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing libx11...")
     system.exec("make install")
