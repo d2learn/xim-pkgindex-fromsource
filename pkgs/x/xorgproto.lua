@@ -33,7 +33,13 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "xim:ninja@1.12.1",
+                "fromsource:meson@1.9.1",
+            },
             ["latest"] = { ref = "2024.1" },
             ["2024.1"] = {
                 url = {
@@ -85,7 +91,7 @@ function install()
     )
 
     log.info("3.Building xorgproto...")
-    system.exec("ninja -j24")
+    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing xorgproto...")
     system.exec("ninja install")
