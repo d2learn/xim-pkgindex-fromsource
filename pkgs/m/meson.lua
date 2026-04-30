@@ -34,7 +34,10 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "python@3.13.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:python@3.13.1",
+            },
             ["latest"] = { ref = "1.9.1" },
             ["1.9.1"] = {
                 url = {
