@@ -33,7 +33,13 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorgproto@2024.1", "xorg-macros@1.20.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "fromsource:xorgproto@2024.1",
+                "fromsource:xorg-macros@1.20.1",
+            },
             ["latest"] = { ref = "1.0.11" },
             ["1.0.11"] = {
                 url = {
@@ -95,7 +101,7 @@ function install()
     )
 
     log.info("3.Building libxau...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing libxau...")
     system.exec("make install")
