@@ -32,7 +32,11 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make@4.3", "ninja@1.12.1", "gcc@15.1.0" },
+            deps = {
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "xim:ninja@1.12.1",
+            },
             ["latest"] = { ref = "10.1.0" },
             ["10.1.0"] = { url = qemu_url("10.1.0") },
             ["9.2.4"] = { url = qemu_url("9.2.4") },
@@ -82,7 +86,7 @@ function install()
             .. " --enable-tools" -- build qemu-img and others
             .. " --enable-fdt=system" -- use system device tree
         )
-        system.exec("make -j8", { retry = 3 })
+        system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
         system.exec("make install")
     system.exec("xvm workspace global --active true")
     return true
