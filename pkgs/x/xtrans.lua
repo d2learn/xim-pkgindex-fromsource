@@ -33,7 +33,12 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorg-macros@1.20.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "fromsource:xorg-macros@1.20.1",
+            },
             ["latest"] = { ref = "1.5.2" },
             ["1.5.2"] = {
                 url = __xtrans_url("1.5.2"),
@@ -71,7 +76,7 @@ function install()
     )
 
     log.info("3.Building xtrans...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing xtrans...")
     system.exec("make install")
