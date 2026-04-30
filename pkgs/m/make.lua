@@ -30,7 +30,10 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make@4.3", "musl-gcc@15.1.0" },
+            deps = {
+                "xim:make@4.3",       -- bootstrap make to build the new make
+                "xim:musl-gcc@15.1.0",
+            },
             ["latest"] = { ref = "4.3" },
             ["4.3"] = {
                 url = {
@@ -76,7 +79,7 @@ function install()
     )
 
     log.info("4.Building make...")
-    system.exec("make -j24", { retry = 3 })
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
 
     log.info("5.Installing make...")
     system.exec("make install")
