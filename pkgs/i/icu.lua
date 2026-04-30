@@ -53,7 +53,11 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "77.1" },
             ["77.1"] = {
                 url = {
@@ -143,7 +147,7 @@ function install()
     )
 
     log.info("4.Building ICU...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("5.Installing ICU...")
     system.exec("make install")
@@ -218,7 +222,7 @@ end
 function uninstall()
     xvm.remove("icu")
 
-    for _, lib in ipairs(libs) do
+    for _, lib in ipairs(icu_libs()) do
         xvm.remove(lib, "icu-" .. pkginfo.version())
     end
 
