@@ -9,7 +9,7 @@ package = {
 
     authors = "Jean-loup Gailly, Mark Adler",
     licenses = "https://zlib.net/zlib_license.html",
-    repo = "https://github.com/torvalds/linux",
+    repo = "https://github.com/madler/zlib",
 
     -- xim pkg info
     type = "package",
@@ -24,7 +24,12 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:configure-project-installer@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "1.3.1" },
             ["1.3.1"] = { },
         },
