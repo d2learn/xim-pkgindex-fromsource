@@ -33,7 +33,12 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "python@3.13.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:python@3.13.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "1.17.0" },
             ["1.17.0"] = {
                 url = __xcb_proto_url("1.17.0"),
@@ -65,7 +70,7 @@ function install()
     )
 
     log.info("3.Building xcb-proto...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing xcb-proto...")
     system.exec("make install")
