@@ -26,14 +26,18 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "gcc@15.1.0", "make@4.3", "configure-project-installer@0.0.1",
-                "xz-utils@5.4.5", "libffi@3.4.4", "readline@8.2",
-                "util-linux@2.39.3", -- for libuuid
-                "openssl@3.1.5", -- for ssl
-                "ncurses@6.4", -- for libtinfo
-                "fromsource:bzip2@1.0.8", -- for bz2
-                "zlib@1.3.1", -- for zlib needed by binascii
-                -- TODO: bzip2, gdbm, qlite3, tk/tkinter
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "xim:configure-project-installer@0.0.1",
+                "fromsource:xz-utils@5.4.5",
+                "fromsource:libffi@3.4.4",
+                "fromsource:readline@8.2",
+                "fromsource:util-linux@2.39.3",     -- for libuuid
+                "fromsource:openssl@3.1.5",         -- for ssl
+                "fromsource:ncurses@6.4",           -- for libtinfo
+                "fromsource:bzip2@1.0.8",           -- for bz2
+                "fromsource:zlib@1.3.1",            -- for binascii
+                -- TODO: gdbm, sqlite3, tk/tkinter
             },
             ["latest"] = { ref = "3.13.1"},
             ["3.13.1"] = { url = _linux_download_url("3.13.1"), sha256 = nil },
@@ -46,8 +50,6 @@ package = {
     },
 }
 
-import("common")
-import("xim.base.utils")
 import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.system")
 import("xim.libxpkg.xvm")
