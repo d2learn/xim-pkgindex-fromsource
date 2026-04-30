@@ -42,8 +42,15 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper@0.0.1", "gcc@15.1.0", -- gcc > 11 (gcc15 is ok)
-                "make@4.3", "meson@1.9.1", "ninja@1.12.1", "python@3.13.1", "libffi@3.4.4", "zlib@1.3.1", "pcre2@10.42"
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",          -- gcc > 11 (gcc15 is ok)
+                "xim:make@4.3",
+                "xim:ninja@1.12.1",
+                "xim:python@3.13.1",
+                "fromsource:meson@1.9.1",
+                "fromsource:libffi@3.4.4",
+                "fromsource:zlib@1.3.1",
+                "fromsource:pcre2@10.42",
             },
             ["latest"] = { ref = "2.82.2" },
             ["2.82.2"] = {
@@ -132,7 +139,7 @@ function install()
     )
 
     log.info("3.Building glib...")
-    system.exec("ninja -j24")
+    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing glib...")
     system.exec("ninja install")
