@@ -33,7 +33,16 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "ninja@1.12.1", "freetype@2.13.2", "fontconfig@2.14.2", "libpng@1.6.43", "pixman@0.42.2" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "xim:ninja@1.12.1",
+                "fromsource:freetype@2.13.2",
+                "fromsource:fontconfig@2.14.2",
+                "fromsource:libpng@1.6.43",
+                "fromsource:pixman@0.42.2",
+            },
             ["latest"] = { ref = "1.18.0" },
             ["1.18.0"] = {
                 url = {
@@ -106,7 +115,7 @@ function install()
     )
 
     log.info("3.Building cairo...")
-    system.exec("ninja -j24")
+    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing cairo...")
     system.exec("ninja install")
