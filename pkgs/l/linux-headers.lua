@@ -19,7 +19,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make@4.3" },
+            deps = { "xim:make@4.3" },
             ["latest"] = { ref = "5.11.1" },
             ["5.11.1"] = {
                 url = "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.11.1.tar.gz",
