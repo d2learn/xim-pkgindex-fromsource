@@ -34,7 +34,13 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "readline@8.2", "zlib@1.3.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "fromsource:readline@8.2",
+                "fromsource:zlib@1.3.1",
+            },
             ["latest"] = { ref = "10.42" },
             ["10.42"] = {
                 url = {
@@ -115,7 +121,7 @@ function install()
     )
 
     log.info("3.Building pcre2...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing pcre2...")
     system.exec("make install")
