@@ -37,7 +37,15 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "m4@1.4.19" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                -- TODO: add fromsource:m4 (or xim:m4) when packaged.
+                -- bison's configure script and runtime invoke `m4`. For now
+                -- we rely on the host providing m4 (true on every reasonable
+                -- builder + every distro CI runner).
+            },
             ["latest"] = { ref = "3.8.2" },
             ["3.8.2"] = {
                 url = {
@@ -75,7 +83,7 @@ function install()
     )
 
     log.info("3.Building bison...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing bison...")
     system.exec("make install")
