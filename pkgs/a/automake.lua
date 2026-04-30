@@ -20,7 +20,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "configure-project-installer@0.0.1" },
+            deps = { "xim:configure-project-installer@0.0.1" },
             ["latest"] = { ref = "1.16.5" },
             ["1.16.5"] = { },
         },
