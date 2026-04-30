@@ -31,7 +31,11 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "3.5" },
             ["3.5"] = {
                 url = {
@@ -75,13 +79,15 @@ function install()
     
     log.info("1.Building libselinux...")
     os.cd(scode_dir)
-    
-    local make_cmd = "make -j24"
-        .. " PREFIX=" .. prefix
-        .. " DESTDIR=" .. prefix
-        .. " LIBDIR=" .. path.join(prefix, "lib")
-        .. " INCLUDEDIR=" .. path.join(prefix, "include")
-    
+
+    local make_cmd = string.format(
+        "make -j%d PREFIX=%s DESTDIR=%s LIBDIR=%s INCLUDEDIR=%s",
+        os.cpuinfo("ncpu") or 4,
+        prefix, prefix,
+        path.join(prefix, "lib"),
+        path.join(prefix, "include")
+    )
+
     system.exec(make_cmd)
     
     log.info("2.Installing libselinux...")
