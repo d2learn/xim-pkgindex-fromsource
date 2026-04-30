@@ -16,13 +16,18 @@ package = {
     status = "stable",
     categories = {"compression"},
     keywords = {"xz", "lzma", "lib", "compression"},
-    programs = { "xz", "unxz", "lzma", "unlzma", "xzcat", "lzcat", "liblzma" },
+    programs = { "xz", "unxz", "lzma", "unlzma", "xzcat", "lzcat" },
 
     xvm_enable = true,
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "configure-project-installer@0.0.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:configure-project-installer@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "5.4.5" },
             ["5.4.5"] = {},
         },
