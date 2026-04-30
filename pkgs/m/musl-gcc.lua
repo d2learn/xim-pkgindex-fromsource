@@ -34,7 +34,7 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "musl-cross-make@0.0.1" },
+            deps = { "xim:musl-cross-make@0.0.1" },
             ["latest"] = { ref = "15.1.0" },
             ["15.1.0"] = {  },
             ["13.3.0"] = {  },
