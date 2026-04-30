@@ -39,7 +39,8 @@ package = {
         linux = {
             deps = {
                 "xim:xpkg-helper@0.0.1",
-                "xim:gcc@15.1.0",                  -- gcc@11.5.0 was also listed; duplicate, dropped
+                "xim:gcc@15.1.0",
+                "xim:gcc@11.5.0",                  -- install() runs xvm.use("gcc", "11", ...) for the actual build; both gccs are real, intentional deps
                 "xim:make@4.3",
                 "xim:ninja@1.12.1",
                 "fromsource:meson@1.9.1",
