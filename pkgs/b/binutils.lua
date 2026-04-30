@@ -35,7 +35,11 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "make@4.3", "gcc@15.1.0", "glibc@2.39" },
+            deps = {
+                "xim:make@4.3",
+                "xim:gcc@15.1.0",
+                "xim:glibc@2.39",
+            },
             ["latest"] = { ref = "2.42" },
             ["2.42"] = {
                 url = {
@@ -80,7 +84,7 @@ function install()
     )
 
     log.info("4.Building binutils...")
-    system.exec("make -j24", { retry = 3 })
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
 
     log.info("5.Installing binutils...")
     -- TODO: use make install DESTDIR=$SYSROOT to avoid prefix hardcoding path in some files (libc.so)
