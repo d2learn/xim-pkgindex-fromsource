@@ -32,8 +32,15 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1",
-                "libx11@1.8.10", "libxcb@1.17.0", "bison@3.8.2", "libxml2@2.15.0"
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "xim:ninja@1.12.1",
+                "fromsource:meson@1.9.1",
+                "fromsource:libx11@1.8.10",
+                "fromsource:libxcb@1.17.0",
+                "fromsource:bison@3.8.2",
+                "fromsource:libxml2@2.15.0",
             },
             ["latest"] = { ref = "1.13.1" },
             ["1.13.1"] = {
@@ -97,7 +104,7 @@ function install()
     )
 
     log.info("3.Building libxkbcommon...")
-    system.exec("ninja -j24")
+    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing libxkbcommon...")
     system.exec("ninja install")
