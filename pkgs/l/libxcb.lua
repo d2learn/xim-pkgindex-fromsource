@@ -33,7 +33,15 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "xorgproto@2024.1", "libxau@1.0.11", "libxdmcp@1.1.5", "xcb-proto@1.17.0" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+                "fromsource:xorgproto@2024.1",
+                "fromsource:libxau@1.0.11",
+                "fromsource:libxdmcp@1.1.5",
+                "fromsource:xcb-proto@1.17.0",
+            },
             ["latest"] = { ref = "1.17.0" },
             ["1.17.0"] = {
                 url = {
@@ -110,7 +118,7 @@ function install()
     )
 
     log.info("3.Building libxcb...")
-    system.exec("make -j24")
+    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
 
     log.info("4.Installing libxcb...")
     system.exec("make install")
