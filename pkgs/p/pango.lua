@@ -38,8 +38,16 @@ package = {
     xpm = {
         linux = {
             deps = {
-                "xpkg-helper@0.0.1", "gcc@15.1.0", "make@4.3", "meson@1.9.1", "ninja@1.12.1",
-                "harfbuzz@8.3.0", "freetype@2.13.2", "fontconfig@2.14.2", "cairo@1.18.0", "gcc@11.5.0",
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:gcc@11.5.0",                  -- install() switches to gcc 11 via xvm.use for the actual build; both gccs are real deps
+                "xim:make@4.3",
+                "xim:ninja@1.12.1",
+                "fromsource:meson@1.9.1",
+                "fromsource:harfbuzz@8.3.0",
+                "fromsource:freetype@2.13.2",
+                "fromsource:fontconfig@2.14.2",
+                "fromsource:cairo@1.18.0",
             },
             ["latest"] = { ref = "1.57.0" },
             ["1.57.0"] = {
@@ -129,7 +137,7 @@ function install()
     log.info("3.Building pango...")
     local gcc_info = xvm.info("gcc", "")
     xvm.use("gcc", "11", gcc_info)
-    system.exec("ninja -j24")
+    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
     xvm.use("gcc", gcc_info["Version"])
 
     log.info("4.Installing pango...")
