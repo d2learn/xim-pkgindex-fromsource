@@ -59,72 +59,60 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function pcre2_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    
-    local out = {}
-    
-    -- Scan for all libpcre2*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libpcre2*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libpcre2*.so*"))
     if #out == 0 then
-        table.insert(out, "libpcre2-8.so")
-        table.insert(out, "libpcre2-8.so.0")
-        table.insert(out, "libpcre2-posix.so")
-        table.insert(out, "libpcre2-posix.so.3")
+        out = {
+            "libpcre2-8.so", "libpcre2-8.so.0",
+            "libpcre2-posix.so", "libpcre2-posix.so.3",
+        }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_pcre2_dir = path.absolute("pcre2-" .. pkginfo.version())
-    local build_pcre2_dir = "build-pcre2"
-
-    log.info("1.Creating build dir -" .. build_pcre2_dir)
-    os.tryrm(build_pcre2_dir)
-    os.mkdir(build_pcre2_dir)
-
-    log.info("2.Configuring pcre2 with autotools...")
-    
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "pcre2-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-pcre2")
+    local prefix = pkginfo.install_dir()
     local sysroot = system.subos_sysrootdir()
-    os.setenv("ACLOCAL_PATH", path.join(sysroot, "usr/share/aclocal"))
-    os.setenv("PKG_CONFIG_PATH", path.join(sysroot, "usr/lib/pkgconfig"))
-    
-    -- ** Cannot --enable-pcre2test-readline because readline library was not found.
-    os.setenv("CPPFLAGS", "-I" .. path.join(sysroot, "usr/include"))
-    --os.setenv("LDFLAGS", "-L" .. path.join(sysroot, "lib"))
-    
-    print(os.getenv("CPPFLAGS"))
-    print(os.getenv("LDFLAGS"))
 
-    os.cd(build_pcre2_dir)
-    local pcre2_prefix = pkginfo.install_dir()
-    system.exec("" .. scode_pcre2_dir .. "/configure"
-        .. " --prefix=" .. pcre2_prefix
-        .. " --disable-static"
-        .. " --enable-shared"
-        .. " --enable-pcre2-8"
-        .. " --enable-pcre2-16"
-        .. " --enable-pcre2-32"
-        .. " --enable-pcre2grep-libz"
-        .. " --enable-pcre2test-libreadline"
-    )
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("3.Building pcre2...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing pcre2...")
-    system.exec("make install")
+    log.info("Configuring + building + installing pcre2 (autotools)...")
+    -- pcre2test-libreadline disabled because readline isn't reliably
+    -- exposed via pkg-config in this env.
+    system.exec(string.format(
+        "sh -c 'export ACLOCAL_PATH=%s/usr/share/aclocal; "
+        .. "export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig; "
+        .. "export CPPFLAGS=\"-I%s/usr/include\"; "
+        .. "cd %s && %s/configure --prefix=%s --disable-static --enable-shared "
+        .. "--enable-pcre2-8 --enable-pcre2-16 --enable-pcre2-32 --enable-pcre2grep-libz "
+        .. "&& make -j8 && make install'",
+        sysroot, sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -166,56 +154,43 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
+    local sys_inc = _sys_usr_includedir()
     local pcre2_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
+    os.mkdir(sys_inc)
 
-    -- Copy pcre2 headers
-    for _, header in ipairs(os.files(path.join(pcre2_hdr_dir, "pcre2*.h"))) do
-        os.cp(header, sys_usr_includedir, { force = true })
-    end
+    -- shell glob copy
+    system.exec(string.format(
+        "sh -c 'cp -f %s/pcre2*.h %s/ 2>/dev/null || true'",
+        pcre2_hdr_dir, sys_inc
+    ))
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    -- pkgconfig glob copy
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "libpcre2*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/libpcre2*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
-
     xvm.add("pcre2")
-
     return true
 end
 
 function uninstall()
     xvm.remove("pcre2")
-
     for _, lib in ipairs(pcre2_libs()) do
         xvm.remove(lib, "pcre2-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "pcre2-" .. pkginfo.version())
     end
-
-    -- Remove header files
-    local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-    for _, header in ipairs(os.files(path.join(sys_usr_includedir, "pcre2*.h"))) do
-        os.tryrm(header)
-    end
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "libpcre2*.pc"))) do
-        os.tryrm(pc)
-    end
-
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pcre2*.h %s/pkgconfig/libpcre2*.pc'",
+        _sys_usr_includedir(), _sys_usr_libdir()
+    ))
     return true
 end

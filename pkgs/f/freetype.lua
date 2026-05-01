@@ -74,59 +74,52 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function freetype_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    
-    local out = {}
-    local base = "libfreetype.so"
-    
-    -- Scan for all libfreetype.so* files
-    for _, file in ipairs(os.files(path.join(libdir, base .. "*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libfreetype.so*"))
     if #out == 0 then
-        table.insert(out, base)
-        table.insert(out, base .. ".6")
+        out = { "libfreetype.so", "libfreetype.so.6" }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_freetype_dir = path.absolute("freetype-" .. pkginfo.version())
-    local build_freetype_dir = "build-freetype"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "freetype-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-freetype")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_freetype_dir)
-    os.tryrm(build_freetype_dir)
-    os.mkdir(build_freetype_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring freetype with meson...")
-    os.cd(build_freetype_dir)
-    local freetype_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_freetype_dir
-        .. " --prefix=" .. freetype_prefix
-        .. " --buildtype=release"
-        .. " --default-library=shared"
-        .. " -Dzlib=disabled"
-        .. " -Dbzip2=disabled"
-        .. " -Dpng=disabled"
-        .. " -Dbrotli=disabled"
-        .. " -Dharfbuzz=disabled"
-    )
-
-    log.info("3.Building freetype...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing freetype...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing freetype (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "--default-library=shared -Dzlib=disabled -Dbzip2=disabled "
+        .. "-Dpng=disabled -Dbrotli=disabled -Dharfbuzz=disabled "
+        .. "&& ninja -j8 && ninja install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -157,52 +150,33 @@ function config()
     -- no programs to register
 
     log.info("Adding header files to sysroot...")
-    local freetype_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy freetype headers
-    local freetype_include_dir = path.join(freetype_hdr_dir, "freetype2")
-    if os.isdir(freetype_include_dir) then
-        os.cp(freetype_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local ft_dir = path.join(pkginfo.install_dir(), "include", "freetype2")
+    if os.isdir(ft_dir) then
+        os.cp(ft_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "freetype2.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local pc = path.join(pkginfo.install_dir(), pc_subdir, "freetype2.pc")
+        if os.isfile(pc) then
+            os.cp(pc, sys_pc_dir, { force = true })
         end
     end
 
     xvm.add("freetype", { binding = version_tag })
-
     return true
 end
 
 function uninstall()
     xvm.remove("freetype")
-
     for _, lib in ipairs(freetype_libs()) do
         xvm.remove(lib, "freetype-" .. pkginfo.version())
     end
-
-    -- no programs to remove
-
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "freetype2"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    os.tryrm(path.join(sys_pc_dir, "freetype2.pc"))
-
+    os.tryrm(path.join(_sys_usr_includedir(), "freetype2"))
+    os.tryrm(path.join(_sys_usr_libdir(), "pkgconfig", "freetype2.pc"))
     xvm.remove("freetype-binding-tree")
-
     return true
 end

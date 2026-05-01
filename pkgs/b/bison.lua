@@ -64,29 +64,20 @@ import("xim.libxpkg.system")
 import("xim.libxpkg.xvm")
 
 function install()
-    local scode_dir = path.absolute("bison-" .. pkginfo.version())
-    local build_dir = "build-bison"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "bison-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-bison")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir - " .. build_dir)
     os.tryrm(build_dir)
     os.mkdir(build_dir)
 
-    log.info("2.Configuring bison...")
-    os.cd(build_dir)
-    local prefix = pkginfo.install_dir()
-    local configure_file = path.join(scode_dir, "configure")
-
-    system.exec(configure_file
-        .. " --prefix=" .. prefix
-        .. " --disable-nls"
-        .. " --disable-werror"
-    )
-
-    log.info("3.Building bison...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing bison...")
-    system.exec("make install")
+    log.info("Configuring + building + installing bison (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --prefix=%s --disable-nls --disable-werror "
+        .. "&& make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end

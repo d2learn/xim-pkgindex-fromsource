@@ -70,6 +70,23 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function glib_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
@@ -77,72 +94,39 @@ local function glib_libs()
     end
     
     local out = {}
-    
-    -- Scan for all glib*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libglib-*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
+    for _, prefix in ipairs({"libglib-", "libgobject-", "libgio-", "libgmodule-", "libgthread-"}) do
+        for _, name in ipairs(_ls_glob(path.join(libdir, prefix .. "*.so*"))) do
+            table.insert(out, name)
+        end
     end
-    for _, file in ipairs(os.files(path.join(libdir, "libgobject-*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    for _, file in ipairs(os.files(path.join(libdir, "libgio-*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    for _, file in ipairs(os.files(path.join(libdir, "libgmodule-*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    for _, file in ipairs(os.files(path.join(libdir, "libgthread-*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
     if #out == 0 then
-        table.insert(out, "libglib-2.0.so")
-        table.insert(out, "libglib-2.0.so.0")
-        table.insert(out, "libgobject-2.0.so")
-        table.insert(out, "libgobject-2.0.so.0")
-        table.insert(out, "libgio-2.0.so")
-        table.insert(out, "libgio-2.0.so.0")
-        table.insert(out, "libgmodule-2.0.so")
-        table.insert(out, "libgmodule-2.0.so.0")
+        out = {
+            "libglib-2.0.so", "libglib-2.0.so.0",
+            "libgobject-2.0.so", "libgobject-2.0.so.0",
+            "libgio-2.0.so", "libgio-2.0.so.0",
+            "libgmodule-2.0.so", "libgmodule-2.0.so.0",
+        }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_glib_dir = path.absolute("glib-" .. pkginfo.version())
-    local build_glib_dir = "build-glib"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "glib-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-glib")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir -" .. build_glib_dir)
-    os.tryrm(build_glib_dir)
-    os.mkdir(build_glib_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring glib with meson...")
-    
-    os.setenv("PKG_CONFIG_PATH", path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig"))
-    
-    os.cd(build_glib_dir)
-    local glib_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_glib_dir
-        .. " --prefix=" .. glib_prefix
-        .. " --buildtype=release"
-        .. " -Dman=false"
-        .. " -Dtests=false"
-    )
-
-    log.info("3.Building glib...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing glib...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing glib (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig:%s/usr/share/pkgconfig; "
+        .. "cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "-Dman=false -Dtests=false && ninja -j8 && ninja install'",
+        sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -184,45 +168,29 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
-    local glib_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy glib-2.0 headers
-    local glib_include_dir = path.join(glib_hdr_dir, "glib-2.0")
-    if os.isdir(glib_include_dir) then
-        os.cp(glib_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local glib_dir = path.join(pkginfo.install_dir(), "include", "glib-2.0")
+    if os.isdir(glib_dir) then
+        os.cp(glib_dir, sys_inc, { force = true })
     end
 
-    -- Copy glibconfig.h from lib directory
+    -- glibconfig.h from lib directory
     local glibconfig_src = path.join(libdir, "glib-2.0/include/glibconfig.h")
     if os.isfile(glibconfig_src) then
-        local glibconfig_dst = path.join(sys_usr_includedir, "glib-2.0/glibconfig.h")
-        os.cp(glibconfig_src, glibconfig_dst, { force = true })
+        os.cp(glibconfig_src, path.join(sys_inc, "glib-2.0/glibconfig.h"), { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "glib*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
-            for _, pc in ipairs(os.files(path.join(pc_dir, "gobject*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
-            for _, pc in ipairs(os.files(path.join(pc_dir, "gio*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
-            for _, pc in ipairs(os.files(path.join(pc_dir, "gmodule*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
-            for _, pc in ipairs(os.files(path.join(pc_dir, "gthread*.pc"))) do
-                os.cp(pc, sys_pc_dir)
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            for _, glob in ipairs({"glib*.pc", "gobject*.pc", "gio*.pc", "gmodule*.pc", "gthread*.pc"}) do
+                system.exec(string.format(
+                    "sh -c 'cp -f %s/%s %s/ 2>/dev/null || true'",
+                    src, glob, sys_pc_dir
+                ))
             end
         end
     end
@@ -243,16 +211,12 @@ function uninstall()
         xvm.remove(prog, "glib-" .. pkginfo.version())
     end
 
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "glib-2.0"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pattern in ipairs({"glib*.pc", "gobject*.pc", "gio*.pc", "gmodule*.pc", "gthread*.pc"}) do
-        for _, pc in ipairs(os.files(path.join(sys_pc_dir, pattern))) do
-            os.tryrm(pc)
-        end
-    end
+    os.tryrm(path.join(_sys_usr_includedir(), "glib-2.0"))
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
+    system.exec(string.format(
+        "sh -c 'rm -f %s/glib*.pc %s/gobject*.pc %s/gio*.pc %s/gmodule*.pc %s/gthread*.pc'",
+        sys_pc_dir, sys_pc_dir, sys_pc_dir, sys_pc_dir, sys_pc_dir
+    ))
 
     return true
 end

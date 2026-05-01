@@ -85,30 +85,28 @@ local function pixman_libs()
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
 
 function install()
-    local scode_pixman_dir = path.absolute("pixman-" .. pkginfo.version())
-    local build_pixman_dir = "build-pixman"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "pixman-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-pixman")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_pixman_dir)
-    os.tryrm(build_pixman_dir)
-    os.mkdir(build_pixman_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring pixman with meson...")
-    os.cd(build_pixman_dir)
-    local pixman_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_pixman_dir
-        .. " --prefix=" .. pixman_prefix
-        .. " --buildtype=release"
-        .. " --default-library=shared"
-    )
-
-    log.info("3.Building pixman...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing pixman...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing pixman (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "--default-library=shared && ninja -j8 && ninja install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -139,27 +137,19 @@ function config()
     -- no programs to register
 
     log.info("Adding header files to sysroot...")
-    local pixman_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy pixman headers
-    local pixman_include_dir = path.join(pixman_hdr_dir, "pixman-1")
-    if os.isdir(pixman_include_dir) then
-        os.cp(pixman_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local pix_dir = path.join(pkginfo.install_dir(), "include", "pixman-1")
+    if os.isdir(pix_dir) then
+        os.cp(pix_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "pixman-1.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local pc = path.join(pkginfo.install_dir(), pc_subdir, "pixman-1.pc")
+        if os.isfile(pc) then
+            os.cp(pc, sys_pc_dir, { force = true })
         end
     end
 
@@ -177,13 +167,8 @@ function uninstall()
 
     -- no programs to remove
 
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "pixman-1"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    os.tryrm(path.join(sys_pc_dir, "pixman-1.pc"))
-
+    os.tryrm(path.join(_sys_usr_includedir(), "pixman-1"))
+    os.tryrm(path.join(_sys_usr_libdir(), "pkgconfig", "pixman-1.pc"))
     xvm.remove("pixman-binding-tree")
 
     return true

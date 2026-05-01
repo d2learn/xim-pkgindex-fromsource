@@ -92,42 +92,30 @@ local glibc_libs = {
 }
 
 function install()
-
-    local scode_glibc_dir = path.absolute("glibc-" .. pkginfo.version())
-    local build_glibc_dir = "build-glibc"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "glibc-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-glibc")
+    local prefix = pkginfo.install_dir()
 
     local linuxheader_info = xvm.info("linux-headers", "5.11.1")
     local linuxheader_dir = path.directory(linuxheader_info["SPath"])
 
-    log.info("1.Creating build dir -" .. build_glibc_dir)
-    os.tryrm(build_glibc_dir)
-    os.mkdir(build_glibc_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring glibc...")
-    os.cd(build_glibc_dir)
-    local glibc_prefix = pkginfo.install_dir()
-    local configure_file = path.join(scode_glibc_dir, "configure")
-    system.exec(configure_file
-        .. [[ --with-pkgversion="XPKG: xlings install fromsource:glibc"]]
-        .. " --prefix=" .. glibc_prefix
-        .. " --with-headers=" .. path.join(linuxheader_dir, "include")
-        -- makedb.c:51:11: fatal error: selinux/label.h: No such file or directory
-        .. " --without-selinux"
-        .. " --disable-werror"
-        .. " --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu"
-        --.. " libc_cv_slibdir=" .. path.join(glibc_prefix, "lib64")
-    )
+    log.info("Configuring + building + installing glibc (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --with-pkgversion=xlings-fromsource "
+        .. "--prefix=%s --with-headers=%s/include --without-selinux --disable-werror "
+        .. "--build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu "
+        .. "&& make -j8 && make install'",
+        build_dir, scode_dir, prefix, linuxheader_dir
+    ))
 
-    log.info("4.Building glibc...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("5.Installing glibc...")
-    -- TODO: use make install DESTDIR=$SYSROOT to avoid prefix hardcoding path in some files (libc.so)
-    system.exec("make install")
-
-    log.info("6.Creating lib64 symlink...")
-    os.cd(glibc_prefix)
-    os.ln("lib", "lib64")
+    log.info("Creating lib64 symlink...")
+    -- shell ln: avoids sandbox os.cd/os.ln semantics; relative target so the
+    -- lib64 symlink stays valid if prefix is later relocated.
+    system.exec(string.format("sh -c 'cd %s && ln -sf lib lib64'", prefix))
 
     return true
 end

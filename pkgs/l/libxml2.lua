@@ -52,56 +52,55 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function libxml2_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    local out = {}
-    for _, file in ipairs(os.files(path.join(libdir, "libxml2*.so*"))) do
-        table.insert(out, path.filename(file))
-    end
+    local out = _ls_glob(path.join(libdir, "libxml2*.so*"))
     if #out == 0 then
-        table.insert(out, "libxml2.so")
-        table.insert(out, "libxml2.so.2")
+        out = { "libxml2.so", "libxml2.so.2" }
     end
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_dir = path.absolute("libxml2-" .. pkginfo.version())
-    local build_dir = "build-libxml2"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "libxml2-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-libxml2")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir - " .. build_dir)
     os.tryrm(build_dir)
     os.mkdir(build_dir)
 
-    log.info("2.Configuring libxml2...")
-    os.cd(build_dir)
-    local prefix = pkginfo.install_dir()
-    local configure_file = path.join(scode_dir, "autogen.sh")
-
-    os.setenv("LDFLAGS", "-Wl,-rpath,/home/xlings/.xlings_data/subos/linux/lib")
-    -- add rpath link to LDFLAGS
-    --   CCLD     xmlcatalog
-    -- ld: warning: libm.so.6, needed by ./.libs/libxml2.so, not found (try using -rpath or -rpath-link)
-    os.addenv("LDFLAGS", " -Wl,-rpath-link," .. path.join(system.subos_sysrootdir(), "lib"))
-
-    system.exec(configure_file
-        .. " --prefix=" .. prefix
-        .. " --enable-shared"
-        .. " --disable-static"
-        --.. " --with-zlib" -- TODO: enable zlib support
-        .. " --without-python"
-    )
-
-    log.info("3.Building libxml2...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing libxml2...")
-    system.exec("make install")
+    log.info("Configuring + building + installing libxml2 (autogen.sh)...")
+    -- LDFLAGS rpath-link points at the active subos's lib/ so the link of
+    -- xmlcatalog can find libm.so.6 there.
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig; "
+        .. "export LDFLAGS=\"-Wl,-rpath-link,%s/lib\"; "
+        .. "cd %s && %s/autogen.sh --prefix=%s --enable-shared --disable-static --without-python "
+        .. "&& make -j8 && make install'",
+        sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -113,39 +112,34 @@ function config()
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
 
-    local config = {
+    local cfg = {
         type = "lib",
         version = "libxml2-" .. pkginfo.version(),
         bindir = libdir,
     }
-
     for _, lib in ipairs(libxml2_libs()) do
-        config.alias = lib
-        config.filename = lib
-        xvm.add(lib, config)
+        cfg.alias = lib
+        cfg.filename = lib
+        xvm.add(lib, cfg)
     end
 
     log.info("Adding header files to sysroot...")
-    local hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    local xml_include_dir = path.join(hdr_dir, "libxml2")
-    if os.isdir(xml_include_dir) then
-        os.cp(xml_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local xml_dir = path.join(pkginfo.install_dir(), "include", "libxml2")
+    if os.isdir(xml_dir) then
+        os.cp(xml_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "libxml*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/libxml*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
 
@@ -155,17 +149,12 @@ end
 
 function uninstall()
     xvm.remove("libxml2")
-
     for _, lib in ipairs(libxml2_libs()) do
         xvm.remove(lib, "libxml2-" .. pkginfo.version())
     end
-
-    os.tryrm(path.join(sys_usr_includedir, "libxml2"))
-
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "libxml*.pc"))) do
-        os.tryrm(pc)
-    end
-
+    os.tryrm(path.join(_sys_usr_includedir(), "libxml2"))
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pkgconfig/libxml*.pc'", _sys_usr_libdir()
+    ))
     return true
 end

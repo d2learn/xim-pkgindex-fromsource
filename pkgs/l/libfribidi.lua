@@ -58,57 +58,52 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function libfribidi_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    
-    local out = {}
-    
-    -- Scan for all libfribidi*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libfribidi*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libfribidi*.so*"))
     if #out == 0 then
-        table.insert(out, "libfribidi.so")
-        table.insert(out, "libfribidi.so.0")
+        out = { "libfribidi.so", "libfribidi.so.0" }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_libfribidi_dir = path.absolute("fribidi-" .. pkginfo.version())
-    local build_libfribidi_dir = "build-libfribidi"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "fribidi-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-libfribidi")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir -" .. build_libfribidi_dir)
-    os.tryrm(build_libfribidi_dir)
-    os.mkdir(build_libfribidi_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring libfribidi with meson...")
-    
-    os.setenv("PKG_CONFIG_PATH", path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig"))
-    
-    os.cd(build_libfribidi_dir)
-    local libfribidi_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_libfribidi_dir
-        .. " --prefix=" .. libfribidi_prefix
-        .. " --buildtype=release"
-        .. " -Ddocs=false"
-        .. " -Dtests=false"
-    )
-
-    log.info("3.Building libfribidi...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing libfribidi...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing libfribidi (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig; "
+        .. "cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "-Ddocs=false -Dtests=false && ninja -j8 && ninja install'",
+        sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -120,16 +115,15 @@ function config()
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
 
-    local config = {
+    local cfg = {
         type = "lib",
         version = "libfribidi-" .. pkginfo.version(),
         bindir = libdir,
     }
-
     for _, lib in ipairs(libfribidi_libs()) do
-        config.alias = lib
-        config.filename = lib
-        xvm.add(lib, config)
+        cfg.alias = lib
+        cfg.filename = lib
+        xvm.add(lib, cfg)
     end
 
     log.info("Adding programs...")
@@ -150,54 +144,40 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
-    local libfribidi_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy fribidi headers
-    local fribidi_include_dir = path.join(libfribidi_hdr_dir, "fribidi")
-    if os.isdir(fribidi_include_dir) then
-        os.cp(fribidi_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local fb_dir = path.join(pkginfo.install_dir(), "include", "fribidi")
+    if os.isdir(fb_dir) then
+        os.cp(fb_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "fribidi*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/fribidi*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
 
     xvm.add("libfribidi")
-
     return true
 end
 
 function uninstall()
     xvm.remove("libfribidi")
-
     for _, lib in ipairs(libfribidi_libs()) do
         xvm.remove(lib, "libfribidi-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "libfribidi-" .. pkginfo.version())
     end
-
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "fribidi"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "fribidi*.pc"))) do
-        os.tryrm(pc)
-    end
-
+    os.tryrm(path.join(_sys_usr_includedir(), "fribidi"))
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pkgconfig/fribidi*.pc'", _sys_usr_libdir()
+    ))
     return true
 end

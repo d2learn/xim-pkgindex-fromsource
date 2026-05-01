@@ -60,63 +60,58 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function harfbuzz_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    
-    local out = {}
-    
-    -- Scan for all libharfbuzz*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libharfbuzz*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libharfbuzz*.so*"))
     if #out == 0 then
-        table.insert(out, "libharfbuzz.so")
-        table.insert(out, "libharfbuzz.so.0")
-        table.insert(out, "libharfbuzz-subset.so")
-        table.insert(out, "libharfbuzz-subset.so.0")
+        out = {
+            "libharfbuzz.so", "libharfbuzz.so.0",
+            "libharfbuzz-subset.so", "libharfbuzz-subset.so.0",
+        }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_harfbuzz_dir = path.absolute("harfbuzz-" .. pkginfo.version())
-    local build_harfbuzz_dir = "build-harfbuzz"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "harfbuzz-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-harfbuzz")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir -" .. build_harfbuzz_dir)
-    os.tryrm(build_harfbuzz_dir)
-    os.mkdir(build_harfbuzz_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring harfbuzz with meson...")
-    os.cd(build_harfbuzz_dir)
-    local harfbuzz_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_harfbuzz_dir
-        .. " --prefix=" .. harfbuzz_prefix
-        .. " --buildtype=release"
-        .. " --default-library=shared"
-        .. " -Ddocs=disabled"
-        .. " -Dtests=disabled"
-        .. " -Dintrospection=disabled"
-        .. " -Dglib=disabled"
-        .. " -Dgobject=disabled"
-        .. " -Dicu=disabled"
-        .. " -Dfreetype=enabled"
-        .. " -Dcairo=enabled"
-    )
-
-    log.info("3.Building harfbuzz...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing harfbuzz...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing harfbuzz (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig:%s/usr/share/pkgconfig; "
+        .. "cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "--default-library=shared -Ddocs=disabled -Dtests=disabled "
+        .. "-Dintrospection=disabled -Dglib=disabled -Dgobject=disabled -Dicu=disabled "
+        .. "-Dfreetype=enabled -Dcairo=enabled "
+        .. "&& ninja -j8 && ninja install'",
+        sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -147,27 +142,22 @@ function config()
     -- no programs to register
 
     log.info("Adding header files to sysroot...")
-    local harfbuzz_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy harfbuzz headers
-    local harfbuzz_include_dir = path.join(harfbuzz_hdr_dir, "harfbuzz")
-    if os.isdir(harfbuzz_include_dir) then
-        os.cp(harfbuzz_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local hb_dir = path.join(pkginfo.install_dir(), "include", "harfbuzz")
+    if os.isdir(hb_dir) then
+        os.cp(hb_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "harfbuzz*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/harfbuzz*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
 
@@ -185,11 +175,8 @@ function uninstall()
 
     -- no programs to remove
 
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "harfbuzz"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    os.tryrm(path.join(_sys_usr_includedir(), "harfbuzz"))
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     for _, pc in ipairs({"harfbuzz.pc", "harfbuzz-cairo.pc", "harfbuzz-subset.pc"}) do
         os.tryrm(path.join(sys_pc_dir, pc))
     end
