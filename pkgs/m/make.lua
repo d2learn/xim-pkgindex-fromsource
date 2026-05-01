@@ -52,16 +52,22 @@ import("xim.libxpkg.system")
 import("xim.libxpkg.xvm")
 
 function install()
-
-    local scode_make_dir = path.absolute("make-" .. pkginfo.version())
-    local build_make_dir = "build-make"
+    -- xpkg sandbox limits:
+    --   * `path.absolute` returns nil — derive scode dir from
+    --     `pkginfo.install_file()` (absolute tarball path in runtimedir).
+    --   * `os.cd` does not propagate into `system.exec` children — keep
+    --     working dir consistent by chaining configure/make/make-install
+    --     inside a single `sh -c` invocation.
+    --   * `os.cpuinfo` returns nil — use a fixed `-j8`.
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_make_dir = path.join(runtime_dir, "make-" .. pkginfo.version())
+    -- Use an absolute build dir alongside the source so `cd` is unambiguous.
+    local build_make_dir = path.join(runtime_dir, "build-make")
 
     log.info("1.Creating build dir -" .. build_make_dir)
     os.tryrm(build_make_dir)
     os.mkdir(build_make_dir)
 
-    log.info("2.Configuring make...")
-    os.cd(build_make_dir)
     local make_prefix = pkginfo.install_dir()
     local configure_file = path.join(scode_make_dir, "configure")
 
@@ -72,17 +78,11 @@ function install()
     log.warn("make build may fail with musl-gcc, patching...")
     __patch_for_musl_gcc(scode_make_dir)
 
-    system.exec(configure_file
-        .. " --prefix=" .. make_prefix
-        .. " --disable-nls" -- disable native language support
-        .. " --disable-werror"
-    )
-
-    log.info("4.Building make...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
-
-    log.info("5.Installing make...")
-    system.exec("make install")
+    log.info("2.Configuring + 4.Building + 5.Installing make...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s --prefix=%s --disable-nls --disable-werror && make -j8 && make install'",
+        build_make_dir, configure_file, make_prefix
+    ), { retry = 3 })
 
     return true
 end
