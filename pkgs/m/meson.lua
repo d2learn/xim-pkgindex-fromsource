@@ -64,13 +64,17 @@ import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
 function install()
-    local scode_meson_dir = path.absolute("meson-" .. pkginfo.version())
+    -- xpkg sandbox blocks `path.absolute`, so derive the extracted source
+    -- dir from `pkginfo.install_file()` (absolute tarball path in runtimedir).
+    local scode_meson_dir = path.join(
+        path.directory(pkginfo.install_file()),
+        "meson-" .. pkginfo.version()
+    )
     local meson_prefix = pkginfo.install_dir()
 
     log.info("Installing meson...")
 
     os.tryrm(pkginfo.install_dir())
-    -- Copy meson files to install directory
     os.cp(scode_meson_dir, meson_prefix, { force = true })
 
     return os.isdir(pkginfo.install_dir())
