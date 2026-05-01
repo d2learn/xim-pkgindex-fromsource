@@ -44,7 +44,11 @@ package = {
                 -- gzip dropped: no gzip xpkg in any registered indexrepo;
                 -- system tar handles .gz extraction. TODO: package gzip later.
             },
-            ["latest"] = { ref = "15.1.0" },
+            ["latest"] = { ref = "16.1.0" },
+            ["16.1.0"] = {
+                url = __gcc_url("16.1.0"),
+                sha256 = "50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79",
+            },
             ["15.1.0"] = { url = __gcc_url("15.1.0") },
             ["14.2.0"] = { url = __gcc_url("14.2.0") },
             ["13.3.0"] = { url = __gcc_url("13.3.0") },
@@ -75,75 +79,57 @@ local gcc_lib = {
 }
 
 function install()
-    local prerequisites_dir = path.absolute("comm-prerequisites")
-    local sourcedir = path.absolute("gcc-" .. pkginfo.version())
-    local builddir = path.absolute("gcc-build")
+    -- Sandbox template (PR #49 bzip2):
+    --   * `path.absolute` is nil → derive from `pkginfo.install_file()`
+    --     (the absolute tarball path xlings already gives us in runtimedir).
+    --   * `os.cd` doesn't propagate to system.exec children → chain
+    --     download_prerequisites + configure + make + make install in
+    --     a single sh -c so cwd persists.
+    --   * `os.cpuinfo` is nil → fixed `-j8`.
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local prerequisites_dir = path.join(runtime_dir, "comm-prerequisites")
+    local sourcedir = path.join(runtime_dir, "gcc-" .. pkginfo.version())
+    local builddir = path.join(runtime_dir, "gcc-build")
+    local prefix = pkginfo.install_dir()
+    local sysroot_dir = system.subos_sysrootdir()
 
     log.info("0.clean build cache...")
     os.tryrm(prerequisites_dir)
     os.mkdir(prerequisites_dir)
     os.tryrm(builddir)
+    os.mkdir(builddir)
 
-    log.info("1.download prerequisites...")
-    os.cd(sourcedir)
-    -- readfile - contrib/download_prerequisites
-    local filecontent = io.readfile("contrib/download_prerequisites")
+    log.info("1.patching contrib/download_prerequisites (--no-verbose, ftp→https)...")
+    -- This part runs inside the lua sandbox (no system.exec) so it's fine.
+    local prereq_script = path.join(sourcedir, "contrib/download_prerequisites")
+    local filecontent = io.readfile(prereq_script)
     filecontent = filecontent:replace("--no-verbose", " ", { plain = true })
     filecontent = filecontent:replace("ftp://gcc.gnu.org", "https://gcc.gnu.org", { plain = true })
-    io.writefile("contrib/download_prerequisites", filecontent)
-    system.exec("contrib/download_prerequisites --directory=" .. prerequisites_dir)
-
-    --log.info("2.create linux sysroot...")
-    --local sysroot_dir = path.join(builddir, "sysroot")
-
-    os.mkdir(builddir)
-    os.cd(builddir)
-    --__create_sysroot(sysroot_dir)
-
-    log.info("3.build config...")
+    io.writefile(prereq_script, filecontent)
 
     -- TODO: use workspace to build
     local old_glibc_info = xvm.info("glibc", "")
-    local sysroot_dir = system.subos_sysrootdir()
-
--- config gcc (enable gcc-self run in xlings subos by gcc (xlings subos version))
---[[
-    local linker_path = path.join(sysroot_dir, "lib/ld-linux-x86-64.so.2")
-    local libdir = path.join(sysroot_dir, "lib")
-    local gcc_config = string.format(
-        -- CFLAGS="--sysroot=%s" CXXFLAGS="--sysroot=%s"  -- by --with-build-sysroot
-         LDFLAGS="--dynamic-linker %s" , -- self
-        --..  --with-extra-ldflags="--dynamic-linker %s --enable-new-dtags -rpath %s" , -- gcc target
-        linker_path
-]]
-
--- create workspace for build - todo
-
     xvm.use("glibc", "2.39")
-    system.exec(string.format("%s"
-        --.. gcc_config -- pass sysroot to gcc compile/link flags(for gcc)
-        .. [[ --with-pkgversion="XPKG: xlings install fromsource:gcc"]]
-        .. " --with-build-sysroot=" .. sysroot_dir -- glibc headers
-        --.. " --with-native-system-header-dir=/include"
-        .. " --with-sysroot=" .. sysroot_dir
-        .. " --prefix=%s"
-        .. " --enable-languages=c,c++"
-        .. " --disable-multilib"
-        .. " --disable-bootstrap"
-        .. " --disable-werror"
-        .. " --disable-lto" -- (--enable-lto) TODO: liblto_plugin.so -> libc.so.6 version mismatch
-        .. " --enable-threads=posix"
-        .. " --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu"
-        .. " --enable-libsanitizer"
-        --.. " --disable-libsanitizer" -- sanitizer_platform_limits_posix.cc multiple definition of ‘enum fsconfig_command’
-    , path.join(sourcedir, "configure"), pkginfo.install_dir()))
 
-
-    log.info("4.build gcc...")
-    system.exec("time " .. string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
-
-    log.info("5.install gcc...")
-    system.exec("make install")
+    log.info("2.download prerequisites + configure + build + install gcc...")
+    -- Single sh -c: download_prerequisites runs from sourcedir; configure
+    -- runs from builddir. `time make -j8` may exceed default xlings retry
+    -- timeout; retry=3 left in place so transient mirror flakes don't kill
+    -- a 30-minute build.
+    system.exec(string.format(
+        "sh -c 'cd %s && contrib/download_prerequisites --directory=%s "
+        .. "&& cd %s && %s/configure "
+        .. "--with-pkgversion=xlings-fromsource "
+        .. "--with-build-sysroot=%s --with-sysroot=%s --prefix=%s "
+        .. "--enable-languages=c,c++ --disable-multilib --disable-bootstrap "
+        .. "--disable-werror --disable-lto --enable-threads=posix "
+        .. "--build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu "
+        .. "--enable-libsanitizer "
+        .. "&& time make -j8 && make install'",
+        sourcedir, prerequisites_dir,
+        builddir, sourcedir,
+        sysroot_dir, sysroot_dir, prefix
+    ), { retry = 3 })
 
     xvm.use("glibc", old_glibc_info["Version"])
     return true
