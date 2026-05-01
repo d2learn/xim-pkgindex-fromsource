@@ -66,28 +66,30 @@ function install()
         end
     end
 
+    -- xpkg sandbox limits:
+    --   * `os.cd` does not propagate into `system.exec` children
+    --   * `os.cpuinfo` returns nil
+    -- Chain configure/make/make-install in a single `sh -c 'cd … && …'`
+    -- so cwd persists across them, and use a fixed `-j8`.
+    local scode_dir = path.join(
+        path.directory(pkginfo.install_file()),
+        "qemu-" .. pkginfo.version()
+    )
+    local prefix = pkginfo.install_dir()
+
     -- todo: fix host and workspace issues
     system.exec("xvm workspace global --active false")
-        os.cd("qemu-" .. pkginfo.version())
-        system.exec("./configure"
-            .. " --prefix=" .. pkginfo.install_dir()
-            -- share qemu data files
-            .. " --datadir=" .. path.join(pkginfo.install_dir(), "share/qemu")
-            .. " --target-list=x86_64-softmmu,x86_64-linux-user"
-            .. " --enable-slirp" -- for -netdev user
-            .. " --enable-vnc" -- for -vnc :0
-            .. " --enable-gtk" -- for -display gtk
-            .. " --enable-sdl" -- for -display sdl
-            .. " --enable-opengl" -- for -display gtk,gl=on
-            .. " --enable-system" -- build qemu-system-*
-            .. " --enable-kvm"
-            .. " --enable-virtfs" -- for -virtfs
-            .. " --enable-curses" -- for -display curses
-            .. " --enable-tools" -- build qemu-img and others
-            .. " --enable-fdt=system" -- use system device tree
-        )
-        system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
-        system.exec("make install")
+    system.exec(string.format(
+        "sh -c 'cd %s && ./configure"
+        .. " --prefix=%s"
+        .. " --datadir=%s/share/qemu"
+        .. " --target-list=x86_64-softmmu,x86_64-linux-user"
+        .. " --enable-slirp --enable-vnc --enable-gtk --enable-sdl"
+        .. " --enable-opengl --enable-system --enable-kvm --enable-virtfs"
+        .. " --enable-curses --enable-tools --enable-fdt=system"
+        .. " && make -j8 && make install'",
+        scode_dir, prefix, prefix
+    ), { retry = 3 })
     system.exec("xvm workspace global --active true")
     return true
 end
