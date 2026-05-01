@@ -54,61 +54,59 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
 
 function install()
-    local scode_xtrans_dir = path.absolute("libxtrans-xtrans-" .. pkginfo.version())
-    local build_xtrans_dir = "build-xtrans"
+    -- sandbox template (#49 bzip2): path.absolute / os.cd / os.cpuinfo
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "libxtrans-xtrans-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-xtrans")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_xtrans_dir)
-    os.tryrm(build_xtrans_dir)
-    os.mkdir(build_xtrans_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring xtrans with autotools...")
+    -- Export ACLOCAL_PATH/PKG_CONFIG_PATH inside the sh -c so they
+    -- propagate down to autoreconf / aclocal (xorg-macros.m4 lives in
+    -- <sysroot>/usr/share/aclocal and must be discoverable here).
+    local sysroot = system.subos_sysrootdir()
 
-    os.setenv("ACLOCAL_PATH", path.join(system.subos_sysrootdir(), "usr/share/aclocal"))
-    os.setenv("PKG_CONFIG_PATH", path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig"))
-
-    os.cd(build_xtrans_dir)
-    local xtrans_prefix = pkginfo.install_dir()
-    system.exec("" .. scode_xtrans_dir .. "/autogen.sh" -- "/configure"
-        .. " --prefix=" .. xtrans_prefix
-    )
-
-    log.info("3.Building xtrans...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing xtrans...")
-    system.exec("make install")
+    log.info("Configuring + building + installing xtrans (autogen.sh)...")
+    system.exec(string.format(
+        "sh -c 'export ACLOCAL_PATH=%s/usr/share/aclocal; "
+        .. "export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig; "
+        .. "cd %s && %s/autogen.sh --prefix=%s && make -j8 && make install'",
+        sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
 
 function config()
     log.info("Adding xtrans header files to sysroot...")
-    local xtrans_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
+    local sys_inc = _sys_usr_includedir()
+    local sys_lib = _sys_usr_libdir()
+    os.mkdir(sys_inc)
 
-    -- Copy X11/Xtrans headers
-    local xtrans_include_dir = path.join(xtrans_hdr_dir, "X11/Xtrans")
-    if os.isdir(xtrans_include_dir) then
-        local x11_dir = path.join(sys_usr_includedir, "X11")
+    local hdr_dir = path.join(pkginfo.install_dir(), "include")
+    local xtrans_dir = path.join(hdr_dir, "X11/Xtrans")
+    if os.isdir(xtrans_dir) then
+        local x11_dir = path.join(sys_inc, "X11")
         os.mkdir(x11_dir)
-        os.cp(xtrans_include_dir, x11_dir, { force = true })
+        os.cp(xtrans_dir, x11_dir, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(sys_lib, "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "share/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "xtrans.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"share/pkgconfig", "lib/pkgconfig"}) do
+        local pc_file = path.join(pkginfo.install_dir(), pc_subdir, "xtrans.pc")
+        if os.isfile(pc_file) then
+            os.cp(pc_file, sys_pc_dir, { force = true })
         end
     end
 
@@ -119,13 +117,7 @@ end
 
 function uninstall()
     xvm.remove("xtrans")
-
-    -- Remove X11/Xtrans headers
-    os.tryrm(path.join(sys_usr_includedir, "X11/Xtrans"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    os.tryrm(path.join(sys_pc_dir, "xtrans.pc"))
-
+    os.tryrm(path.join(_sys_usr_includedir(), "X11/Xtrans"))
+    os.tryrm(path.join(_sys_usr_libdir(), "pkgconfig", "xtrans.pc"))
     return true
 end
