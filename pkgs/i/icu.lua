@@ -112,45 +112,31 @@ local function icu_libs()
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
 
 function install()
-    local scode_icu_dir = path.absolute("icu")
-    local build_icu_dir = "build-icu"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "icu")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_icu_dir)
-    os.tryrm(build_icu_dir)
-    os.mkdir(build_icu_dir)
-
-    log.info("2.Extracting ICU source...")
-    -- Manually extract the ICU source archive
+    log.info("Extracting + configuring + building + installing ICU...")
+    -- ICU's tarball expands to icu/source/, not icu-<ver>/. The whole
+    -- pipeline runs in one sh -c so cwd persists; tar runs in runtime_dir
+    -- (where install_file lives), then we cd into the source subdir.
     local archive_name = "icu4c-" .. pkginfo.version():gsub("%.", "_") .. "-src.tgz"
-    system.exec("tar -xzf " .. archive_name)
-
-    log.info("3.Configuring ICU...")
-    local icu_prefix = pkginfo.install_dir()
-
-    -- Change to source directory for configuration
-    os.cd(scode_icu_dir)
-    -- Check if we need to enter the source subdirectory
-    if os.isdir("source") then
-        os.cd("source")
-    end
-    system.exec("./configure"
-        .. [[ --with-pkgversion="XPKG: xlings install fromsource:icu"]]
-        .. " --prefix=" .. icu_prefix
-        .. " --disable-samples"
-        .. " --disable-tests"
-        .. " --enable-static=no"
-        .. " --enable-shared=yes"
-        .. " --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu"
-    )
-
-    log.info("4.Building ICU...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("5.Installing ICU...")
-    system.exec("make install")
+    system.exec(string.format(
+        "sh -c 'cd %s && tar -xzf %s && cd %s/source "
+        .. "&& ./configure --with-pkgversion=xlings-fromsource --prefix=%s "
+        .. "--disable-samples --disable-tests --enable-static=no --enable-shared=yes "
+        .. "--build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu "
+        .. "&& make -j8 && make install'",
+        runtime_dir, archive_name, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -195,53 +181,39 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
-    local icu_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy unicode headers
-    local unicode_dir = path.join(icu_hdr_dir, "unicode")
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local unicode_dir = path.join(pkginfo.install_dir(), "include", "unicode")
     if os.isdir(unicode_dir) then
-        os.cp(unicode_dir, sys_usr_includedir, { force = true })
+        os.cp(unicode_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
     local icu_pc_dir = path.join(pkginfo.install_dir(), "lib/pkgconfig")
     if os.isdir(icu_pc_dir) then
-        for _, pc in ipairs(os.files(path.join(icu_pc_dir, "icu*.pc"))) do
-            os.cp(pc, sys_pc_dir)
-        end
+        system.exec(string.format(
+            "sh -c 'cp -f %s/icu*.pc %s/ 2>/dev/null || true'",
+            icu_pc_dir, sys_pc_dir
+        ))
     end
 
     xvm.add("icu", { binding = version_tag })
-
     return true
 end
 
 function uninstall()
     xvm.remove("icu")
-
     for _, lib in ipairs(icu_libs()) do
         xvm.remove(lib, "icu-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "icu-" .. pkginfo.version())
     end
-
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "unicode"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    if os.isdir(sys_pc_dir) then
-        for _, pc in ipairs(os.files(path.join(sys_pc_dir, "icu*.pc"))) do
-            os.tryrm(pc)
-        end
-    end
-
+    os.tryrm(path.join(_sys_usr_includedir(), "unicode"))
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pkgconfig/icu*.pc'", _sys_usr_libdir()
+    ))
     xvm.remove("icu-binding-tree")
-
     return true
 end

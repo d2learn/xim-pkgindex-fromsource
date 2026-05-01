@@ -85,33 +85,29 @@ local function expat_libs()
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
 
 function install()
-    local scode_expat_dir = path.absolute("expat-" .. pkginfo.version())
-    local build_expat_dir = "build-expat"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "expat-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-expat")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_expat_dir)
-    os.tryrm(build_expat_dir)
-    os.mkdir(build_expat_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring expat...")
-    os.cd(build_expat_dir)
-    local expat_prefix = pkginfo.install_dir()
-    system.exec(path.join(scode_expat_dir, "configure")
-        .. " --prefix=" .. expat_prefix
-        .. " --enable-shared"
-        .. " --disable-static"
-        .. " --without-docbook"
-        .. " --without-examples"
-        .. " --without-tests"
-    )
-
-    log.info("3.Building expat...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing expat...")
-    system.exec("make install")
+    log.info("Configuring + building + installing expat (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --prefix=%s --enable-shared --disable-static "
+        .. "--without-docbook --without-examples --without-tests "
+        .. "&& make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -148,50 +144,43 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
+    local sys_inc = _sys_usr_includedir()
     local expat_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
+    os.mkdir(sys_inc)
 
-    -- Copy all expat headers
-    for _, header in ipairs(os.files(path.join(expat_hdr_dir, "expat*.h"))) do
-        os.cp(header, sys_usr_includedir)
-    end
+    -- shell glob copy (sandbox os.files/glob-os.cp broken)
+    system.exec(string.format(
+        "sh -c 'cp -f %s/expat*.h %s/ 2>/dev/null || true'",
+        expat_hdr_dir, sys_inc
+    ))
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
     local expat_pc_dir = path.join(pkginfo.install_dir(), "lib/pkgconfig")
     if os.isdir(expat_pc_dir) then
-        for _, pc in ipairs(os.files(path.join(expat_pc_dir, "expat.pc"))) do
-            os.cp(pc, sys_pc_dir)
+        local pc = path.join(expat_pc_dir, "expat.pc")
+        if os.isfile(pc) then
+            os.cp(pc, sys_pc_dir, { force = true })
         end
     end
 
     xvm.add("expat", { binding = version_tag })
-
     return true
 end
 
 function uninstall()
     xvm.remove("expat")
-
     for _, lib in ipairs(expat_libs()) do
         xvm.remove(lib, "expat-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "expat-" .. pkginfo.version())
     end
-
-    -- Remove header files
+    local sys_inc = _sys_usr_includedir()
     for _, header in ipairs({"expat.h", "expat_config.h", "expat_external.h"}) do
-        os.tryrm(path.join(sys_usr_includedir, header))
+        os.tryrm(path.join(sys_inc, header))
     end
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    os.tryrm(path.join(sys_pc_dir, "expat.pc"))
-
+    os.tryrm(path.join(_sys_usr_libdir(), "pkgconfig", "expat.pc"))
     xvm.remove("expat-binding-tree")
-
     return true
 end

@@ -81,67 +81,66 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function pango_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
     
-    local out = {}
-    
-    -- Scan for all libpango*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libpango*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libpango*.so*"))
     if #out == 0 then
-        table.insert(out, "libpango-1.0.so")
-        table.insert(out, "libpango-1.0.so.0")
-        table.insert(out, "libpangocairo-1.0.so")
-        table.insert(out, "libpangocairo-1.0.so.0")
-        table.insert(out, "libpangoft2-1.0.so")
-        table.insert(out, "libpangoft2-1.0.so.0")
+        out = {
+            "libpango-1.0.so", "libpango-1.0.so.0",
+            "libpangocairo-1.0.so", "libpangocairo-1.0.so.0",
+            "libpangoft2-1.0.so", "libpangoft2-1.0.so.0",
+        }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_pango_dir = path.absolute("pango-" .. pkginfo.version())
-    local build_pango_dir = "build-pango"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "pango-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-pango")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir -" .. build_pango_dir)
-    os.tryrm(build_pango_dir)
-    os.mkdir(build_pango_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring pango with meson...")
-    os.cd(build_pango_dir)
-    local pango_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_pango_dir
-        .. " --prefix=" .. pango_prefix
-        .. " --buildtype=release"
-        .. " --default-library=shared"
-        .. " -Ddocumentation=false"
-        .. " -Dintrospection=disabled"
-        .. " -Dfontconfig=enabled"
-        .. " -Dfreetype=enabled"
-        .. " -Dcairo=enabled"
-        .. " -Dlibthai=disabled"
-        .. " -Dxft=disabled"
-    )
-
-    log.info("3.Building pango...")
+    -- gcc-11 toggle for build (kept verbatim from previous logic).
     local gcc_info = xvm.info("gcc", "")
     xvm.use("gcc", "11", gcc_info)
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-    xvm.use("gcc", gcc_info["Version"])
 
-    log.info("4.Installing pango...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing pango (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig:%s/usr/share/pkgconfig; "
+        .. "cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "--default-library=shared -Ddocumentation=false -Dintrospection=disabled "
+        .. "-Dfontconfig=enabled -Dfreetype=enabled -Dcairo=enabled "
+        .. "-Dlibthai=disabled -Dxft=disabled "
+        .. "&& ninja -j8 && ninja install'",
+        sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
+
+    xvm.use("gcc", gcc_info["Version"])
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -184,55 +183,42 @@ function config()
 
     log.info("Adding header files to sysroot...")
     local pango_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
+    os.mkdir(_sys_usr_includedir())
 
     -- Copy pango headers
     local pango_include_dir = path.join(pango_hdr_dir, "pango-1.0")
     if os.isdir(pango_include_dir) then
-        os.cp(pango_include_dir, sys_usr_includedir, { force = true })
+        os.cp(pango_include_dir, _sys_usr_includedir(), { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "pango*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/pango*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
 
     xvm.add("pango", { binding = version_tag })
-
     return true
 end
 
 function uninstall()
     xvm.remove("pango")
-
     for _, lib in ipairs(pango_libs()) do
         xvm.remove(lib, "pango-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "pango-" .. pkginfo.version())
     end
-
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "pango-1.0"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "pango*.pc"))) do
-        os.tryrm(pc)
-    end
-
+    os.tryrm(path.join(_sys_usr_includedir(), "pango-1.0"))
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pkgconfig/pango*.pc'", _sys_usr_libdir()
+    ))
     xvm.remove("pango-binding-tree")
-
     return true
 end

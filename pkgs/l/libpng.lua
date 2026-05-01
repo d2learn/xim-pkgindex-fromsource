@@ -78,30 +78,25 @@ local libs = {
     "libpng16.so.16",
 }
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
 
 function install()
-    local scode_libpng_dir = path.absolute("libpng-" .. pkginfo.version())
-    local build_libpng_dir = "build-libpng"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "libpng-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-libpng")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_libpng_dir)
-    os.tryrm(build_libpng_dir)
-    os.mkdir(build_libpng_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring libpng...")
-    os.cd(build_libpng_dir)
-    local libpng_prefix = pkginfo.install_dir()
-    system.exec(path.join(scode_libpng_dir, "configure")
-        .. " --prefix=" .. libpng_prefix
-        .. " --enable-shared"
-        .. " --disable-static"
-    )
-
-    log.info("3.Building libpng...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing libpng...")
-    system.exec("make install")
+    log.info("Configuring + building + installing libpng (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --prefix=%s --enable-shared --disable-static "
+        .. "&& make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -138,43 +133,40 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
+    local sys_inc = _sys_usr_includedir()
     local libpng_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
+    os.mkdir(sys_inc)
 
-    -- Copy libpng16 directory
+    -- libpng16/ subdir (literal dir, os.cp works)
     local libpng_include_dir = path.join(libpng_hdr_dir, "libpng16")
     if os.isdir(libpng_include_dir) then
-        os.cp(libpng_include_dir, sys_usr_includedir, { force = true })
+        os.cp(libpng_include_dir, sys_inc, { force = true })
     end
 
-    -- Copy main libpng headers from include root
-    for _, file in ipairs(os.files(path.join(libpng_hdr_dir, "*.h"))) do
-        os.cp(file, sys_usr_includedir)
-    end
+    -- main libpng headers from include root: shell glob copy
+    -- (sandbox os.files(glob) is nil; os.cp(glob,…) is silent no-op).
+    system.exec(string.format(
+        "sh -c 'cp -f %s/*.h %s/ 2>/dev/null || true'",
+        libpng_hdr_dir, sys_inc
+    ))
 
     xvm.add("libpng", { binding = version_tag })
-
     return true
 end
 
 function uninstall()
     xvm.remove("libpng")
-
     for _, lib in ipairs(libs) do
         xvm.remove(lib, "libpng-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "libpng-" .. pkginfo.version())
     end
-
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "libpng16"))
-    os.tryrm(path.join(sys_usr_includedir, "png.h"))
-    os.tryrm(path.join(sys_usr_includedir, "pngconf.h"))
-    os.tryrm(path.join(sys_usr_includedir, "pnglibconf.h"))
-
+    local sys_inc = _sys_usr_includedir()
+    os.tryrm(path.join(sys_inc, "libpng16"))
+    os.tryrm(path.join(sys_inc, "png.h"))
+    os.tryrm(path.join(sys_inc, "pngconf.h"))
+    os.tryrm(path.join(sys_inc, "pnglibconf.h"))
     xvm.remove("libpng-binding-tree")
-
     return true
 end

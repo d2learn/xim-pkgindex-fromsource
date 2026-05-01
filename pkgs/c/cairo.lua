@@ -61,64 +61,58 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function cairo_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
     
-    local out = {}
-    
-    -- Scan for all libcairo*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libcairo*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libcairo*.so*"))
     if #out == 0 then
-        table.insert(out, "libcairo.so")
-        table.insert(out, "libcairo.so.2")
-        table.insert(out, "libcairo-script-interpreter.so")
-        table.insert(out, "libcairo-script-interpreter.so.2")
+        out = {
+            "libcairo.so", "libcairo.so.2",
+            "libcairo-script-interpreter.so", "libcairo-script-interpreter.so.2",
+        }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_cairo_dir = path.absolute("cairo-" .. pkginfo.version())
-    local build_cairo_dir = "build-cairo"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "cairo-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-cairo")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir -" .. build_cairo_dir)
-    os.tryrm(build_cairo_dir)
-    os.mkdir(build_cairo_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring cairo with meson...")
-    os.cd(build_cairo_dir)
-    local cairo_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_cairo_dir
-        .. " --prefix=" .. cairo_prefix
-        .. " --buildtype=release"
-        .. " --default-library=shared"
-        .. " -Dtests=disabled"
-        --.. " -Dglib=disabled"
-        --.. " -Dxlib=disabled" -- undefined symbol: cairo_xlib_surface_get_width
-        --.. " -Dxcb=disabled"
-        .. " -Dquartz=disabled"
-        --.. " -Dtee=disabled"
-        .. " -Dpng=enabled"
-        .. " -Dfreetype=enabled"
-        .. " -Dfontconfig=enabled"
-    )
-
-    log.info("3.Building cairo...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing cairo...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing cairo (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig:%s/usr/share/pkgconfig; "
+        .. "cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "--default-library=shared -Dtests=disabled -Dquartz=disabled "
+        .. "-Dpng=enabled -Dfreetype=enabled -Dfontconfig=enabled "
+        .. "&& ninja -j8 && ninja install'",
+        sysroot, sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -160,27 +154,22 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
-    local cairo_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy cairo headers
-    local cairo_include_dir = path.join(cairo_hdr_dir, "cairo")
-    if os.isdir(cairo_include_dir) then
-        os.cp(cairo_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local cairo_dir = path.join(pkginfo.install_dir(), "include", "cairo")
+    if os.isdir(cairo_dir) then
+        os.cp(cairo_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "cairo*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/cairo*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
 
@@ -200,15 +189,10 @@ function uninstall()
         xvm.remove(prog, "cairo-" .. pkginfo.version())
     end
 
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "cairo"))
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "cairo*.pc"))) do
-        os.tryrm(pc)
-    end
-
+    os.tryrm(path.join(_sys_usr_includedir(), "cairo"))
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pkgconfig/cairo*.pc'", _sys_usr_libdir()
+    ))
     xvm.remove("cairo-binding-tree")
 
     return true

@@ -81,57 +81,53 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function fontconfig_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    
-    local out = {}
-    local base = "libfontconfig.so"
-    
-    -- Scan for all libfontconfig.so* files
-    for _, file in ipairs(os.files(path.join(libdir, base .. "*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- If no files found via glob, return default set
+    local out = _ls_glob(path.join(libdir, "libfontconfig.so*"))
     if #out == 0 then
-        table.insert(out, base)
-        table.insert(out, base .. ".1")
+        out = { "libfontconfig.so", "libfontconfig.so.1" }
     end
-    
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_fontconfig_dir = path.absolute("fontconfig-" .. pkginfo.version())
-    local build_fontconfig_dir = "build-fontconfig"
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "fontconfig-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-fontconfig")
+    local prefix = pkginfo.install_dir()
+    local sysroot = system.subos_sysrootdir()
 
-    log.info("1.Creating build dir -" .. build_fontconfig_dir)
-    os.tryrm(build_fontconfig_dir)
-    os.mkdir(build_fontconfig_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring fontconfig with meson...")
-    os.cd(build_fontconfig_dir)
-    local fontconfig_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_fontconfig_dir
-        .. " --prefix=" .. fontconfig_prefix
-        .. " --buildtype=release"
-        .. " --default-library=shared"
-        .. " -Ddoc=disabled"
-        .. " -Dtests=disabled"
-        .. " -Dtools=enabled"
-    )
-
-    log.info("3.Building fontconfig...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing fontconfig...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing fontconfig (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'export PKG_CONFIG_PATH=%s/usr/lib/pkgconfig; "
+        .. "cd %s && meson setup %s --prefix=%s --buildtype=release "
+        .. "--default-library=shared -Ddoc=disabled -Dtests=disabled -Dtools=enabled "
+        .. "&& ninja -j8 && ninja install'",
+        sysroot, build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -173,48 +169,35 @@ function config()
     end
 
     log.info("Adding header files to sysroot...")
-    local fontconfig_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-
-    -- Copy fontconfig headers
-    local fontconfig_include_dir = path.join(fontconfig_hdr_dir, "fontconfig")
-    if os.isdir(fontconfig_include_dir) then
-        os.cp(fontconfig_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local fc_dir = path.join(pkginfo.install_dir(), "include", "fontconfig")
+    if os.isdir(fc_dir) then
+        os.cp(fc_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "fontconfig.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "lib/x86_64-linux-gnu/pkgconfig"}) do
+        local pc = path.join(pkginfo.install_dir(), pc_subdir, "fontconfig.pc")
+        if os.isfile(pc) then
+            os.cp(pc, sys_pc_dir, { force = true })
         end
     end
 
     xvm.add("fontconfig", { binding = version_tag })
-
     return true
 end
 
 function uninstall()
     xvm.remove("fontconfig")
-
     for _, lib in ipairs(fontconfig_libs()) do
         xvm.remove(lib, "fontconfig-" .. pkginfo.version())
     end
-
     for _, prog in ipairs(package.programs) do
         xvm.remove(prog, "fontconfig-" .. pkginfo.version())
     end
-
-    -- Remove header files
-    os.tryrm(path.join(sys_usr_includedir, "fontconfig"))
+    os.tryrm(path.join(_sys_usr_includedir(), "fontconfig"))
 
     -- Remove pkgconfig files
     local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")

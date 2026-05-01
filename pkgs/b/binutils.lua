@@ -58,37 +58,25 @@ import("xim.libxpkg.system")
 import("xim.libxpkg.xvm")
 
 function install()
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "binutils-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-binutils")
+    local prefix = pkginfo.install_dir()
 
-    local scode_binutils_dir = path.absolute("binutils-" .. pkginfo.version())
-    local build_binutils_dir = "build-binutils"
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("1.Creating build dir -" .. build_binutils_dir)
-    os.tryrm(build_binutils_dir)
-    os.mkdir(build_binutils_dir)
-
-    log.info("2.Configuring binutils...")
-    os.cd(build_binutils_dir)
-    --local sysroot_dir = system.subos_sysrootdir()
-    local binutils_prefix = pkginfo.install_dir()
-    local configure_file = path.join(scode_binutils_dir, "configure")
-    system.exec(configure_file
-        .. [[ --with-pkgversion="XPKG: xlings install fromsource:binutils"]]
-        .. " --prefix=" .. binutils_prefix
-        .. " --enable-plugins" -- enable gold plugin
-        .. " --enable-new-dtags" -- use DT_RUNPATH to search shared libs
-        .. " --disable-nls" -- disable native language support
-        .. " --disable-gprofng" -- disable gprofng (TODO: fix build issue -ldl/-lrt)
-        .. " --disable-werror"
-        .. " --enable-gold --enable-ld=default" -- use gold as default linker
-        --.. " --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu"
-    )
-
-    log.info("4.Building binutils...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4), { retry = 3 })
-
-    log.info("5.Installing binutils...")
-    -- TODO: use make install DESTDIR=$SYSROOT to avoid prefix hardcoding path in some files (libc.so)
-    system.exec("make install")
+    log.info("Configuring + building + installing binutils (autotools)...")
+    -- pkgversion ascii doesn't include shell quotes; the literal
+    -- `--with-pkgversion="XPKG: …"` previously here ended up storing the
+    -- quotes inside the binary string. Switch to a quote-free form.
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --with-pkgversion=xlings-fromsource "
+        .. "--prefix=%s --enable-plugins --enable-new-dtags --disable-nls "
+        .. "--disable-gprofng --disable-werror --enable-gold --enable-ld=default "
+        .. "&& make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ), { retry = 3 })
 
     return true
 end

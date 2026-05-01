@@ -54,45 +54,51 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
+local function _ls_glob(globpat)
+    local out = {}
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
+    end
+    h:close()
+    return out
+end
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
+
 local function libselinux_libs()
     local libdir = path.join(pkginfo.install_dir(), "lib/x86_64-linux-gnu")
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    local out = {}
-    for _, file in ipairs(os.files(path.join(libdir, "libselinux*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
+    local out = _ls_glob(path.join(libdir, "libselinux*.so*"))
     if #out == 0 then
-        table.insert(out, "libselinux.so")
-        table.insert(out, "libselinux.so.1")
+        out = { "libselinux.so", "libselinux.so.1" }
     end
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
-
 function install()
-    local scode_dir = path.absolute("libselinux-" .. pkginfo.version())
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "libselinux-" .. pkginfo.version())
     local prefix = pkginfo.install_dir()
-    
-    log.info("1.Building libselinux...")
-    os.cd(scode_dir)
 
-    local make_cmd = string.format(
-        "make -j%d PREFIX=%s DESTDIR=%s LIBDIR=%s INCLUDEDIR=%s",
-        os.cpuinfo("ncpu") or 4,
-        prefix, prefix,
-        path.join(prefix, "lib"),
-        path.join(prefix, "include")
-    )
+    log.info("Building + installing libselinux (Makefile-driven, no configure)...")
+    -- libselinux uses bare make + install with PREFIX vars; chain in sh -c
+    -- because os.cd doesn't propagate to system.exec children.
+    system.exec(string.format(
+        "sh -c 'cd %s && make -j8 PREFIX=%s DESTDIR=%s LIBDIR=%s/lib INCLUDEDIR=%s/include "
+        .. "&& make -j8 PREFIX=%s DESTDIR=%s LIBDIR=%s/lib INCLUDEDIR=%s/include install'",
+        scode_dir,
+        prefix, prefix, prefix, prefix,
+        prefix, prefix, prefix, prefix
+    ))
 
-    system.exec(make_cmd)
-    
-    log.info("2.Installing libselinux...")
-    system.exec(make_cmd .. " install")
-    
     return os.isdir(pkginfo.install_dir())
 end
 
@@ -102,32 +108,35 @@ function config()
     if not os.isdir(libdir) then
         libdir = path.join(pkginfo.install_dir(), "lib")
     end
-    local config = {
+    local cfg = {
         type = "lib",
         version = "libselinux-" .. pkginfo.version(),
         bindir = libdir,
     }
     for _, lib in ipairs(libselinux_libs()) do
-        config.alias = lib
-        config.filename = lib
-        xvm.add(lib, config)
+        cfg.alias = lib
+        cfg.filename = lib
+        xvm.add(lib, cfg)
     end
+
     log.info("Adding header files to sysroot...")
-    local hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
-    local selinux_include_dir = path.join(hdr_dir, "selinux")
-    if os.isdir(selinux_include_dir) then
-        os.cp(selinux_include_dir, sys_usr_includedir, { force = true })
+    local sys_inc = _sys_usr_includedir()
+    os.mkdir(sys_inc)
+    local sel_dir = path.join(pkginfo.install_dir(), "include", "selinux")
+    if os.isdir(sel_dir) then
+        os.cp(sel_dir, sys_inc, { force = true })
     end
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dir = path.join(pkginfo.install_dir(), "lib/pkgconfig")
-    if os.isdir(pc_dir) then
-        for _, pc in ipairs(os.files(path.join(pc_dir, "selinux*.pc"))) do
-            os.cp(pc, sys_pc_dir)
-        end
+    local pc_src = path.join(pkginfo.install_dir(), "lib/pkgconfig")
+    if os.isdir(pc_src) then
+        system.exec(string.format(
+            "sh -c 'cp -f %s/selinux*.pc %s/ 2>/dev/null || true'",
+            pc_src, sys_pc_dir
+        ))
     end
+
     xvm.add("libselinux")
     return true
 end
@@ -137,10 +146,9 @@ function uninstall()
     for _, lib in ipairs(libselinux_libs()) do
         xvm.remove(lib, "libselinux-" .. pkginfo.version())
     end
-    os.tryrm(path.join(sys_usr_includedir, "selinux"))
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "selinux*.pc"))) do
-        os.tryrm(pc)
-    end
+    os.tryrm(path.join(_sys_usr_includedir(), "selinux"))
+    system.exec(string.format(
+        "sh -c 'rm -f %s/pkgconfig/selinux*.pc'", _sys_usr_libdir()
+    ))
     return true
 end
