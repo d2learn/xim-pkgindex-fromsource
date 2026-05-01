@@ -35,12 +35,18 @@ import("xim.libxpkg.xvm")
 import("xim.libxpkg.log")
 
 function install()
+    -- xpkg sandbox: `os.cd` does not propagate into `system.exec` children,
+    -- so use `make -C <dir>` to set the build directory explicitly.
+    local scode_dir = path.join(
+        path.directory(pkginfo.install_file()),
+        "linux-" .. pkginfo.version()
+    )
 
     os.tryrm(pkginfo.install_dir())
-    os.cd("linux-" .. pkginfo.version())
-    system.exec("make headers_install"
-        .. " INSTALL_HDR_PATH=" .. pkginfo.install_dir()
-    )
+    system.exec(string.format(
+        "make -C %s headers_install INSTALL_HDR_PATH=%s",
+        scode_dir, pkginfo.install_dir()
+    ))
 
     log.info("Copying linux header files to subos rootfs ...")
     local sysroot_usrdir = path.join(system.subos_sysrootdir(), "usr")
