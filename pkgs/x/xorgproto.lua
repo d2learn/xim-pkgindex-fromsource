@@ -72,62 +72,67 @@ import("xim.libxpkg.pkginfo")
 import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+-- Resolve sysroot paths inside hooks (top-level eval may run before xlings
+-- sets the active subos).
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
 
 function install()
-    local scode_xorgproto_dir = path.absolute("xorgproto-" .. pkginfo.version())
-    local build_xorgproto_dir = "build-xorgproto"
+    -- Standard sandbox-fix template (see #49 bzip2):
+    --   * `path.absolute` → derive from `pkginfo.install_file()`
+    --   * `os.cd` doesn't propagate to system.exec children → single sh -c
+    --   * `os.cpuinfo` is nil → fixed `-j8`
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "xorgproto-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-xorgproto")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_xorgproto_dir)
-    os.tryrm(build_xorgproto_dir)
-    os.mkdir(build_xorgproto_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring xorgproto with meson...")
-    os.cd(build_xorgproto_dir)
-    local xorgproto_prefix = pkginfo.install_dir()
-    system.exec("meson setup " .. scode_xorgproto_dir
-        .. " --prefix=" .. xorgproto_prefix
-        .. " --buildtype=release"
-    )
-
-    log.info("3.Building xorgproto...")
-    system.exec(string.format("ninja -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing xorgproto...")
-    system.exec("ninja install")
+    log.info("Configuring + building + installing xorgproto (meson/ninja)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && meson setup %s --prefix=%s --buildtype=release && ninja -j8 && ninja install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
 
 function config()
     log.info("Adding xorgproto header files to sysroot...")
-    local xorgproto_hdr_dir = path.join(pkginfo.install_dir(), "include")
-    os.mkdir(sys_usr_includedir)
+    local sys_inc = _sys_usr_includedir()
+    local sys_lib = _sys_usr_libdir()
+    local hdr_dir = path.join(pkginfo.install_dir(), "include")
+    os.mkdir(sys_inc)
 
-    -- Copy X11 protocol headers
-    local x11_include_dir = path.join(xorgproto_hdr_dir, "X11")
-    if os.isdir(x11_include_dir) then
-        os.cp(x11_include_dir, sys_usr_includedir, { force = true })
+    -- Copy X11 protocol headers (literal dir, os.cp works).
+    local x11_dir = path.join(hdr_dir, "X11")
+    if os.isdir(x11_dir) then
+        os.cp(x11_dir, sys_inc, { force = true })
     end
 
-    -- Copy GL headers if present
-    local gl_include_dir = path.join(xorgproto_hdr_dir, "GL")
-    if os.isdir(gl_include_dir) then
-        os.cp(gl_include_dir, sys_usr_includedir, { force = true })
+    -- Copy GL headers if present.
+    local gl_dir = path.join(hdr_dir, "GL")
+    if os.isdir(gl_dir) then
+        os.cp(gl_dir, sys_inc, { force = true })
     end
 
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    -- pkgconfig files: glob copy via shell since `os.files(glob)` is nil
+    -- and `os.cp(glob,…)` silently no-ops.
+    local sys_pc_dir = path.join(sys_lib, "pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "share/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "*.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "share/pkgconfig"}) do
+        local pc_src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(pc_src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/*.pc %s/ 2>/dev/null || true'",
+                pc_src, sys_pc_dir
+            ))
         end
     end
 
@@ -140,9 +145,9 @@ function uninstall()
     xvm.remove("xorgproto")
 
     -- Remove X11 protocol headers
-    os.tryrm(path.join(sys_usr_includedir, "X11/extensions"))
-    os.tryrm(path.join(sys_usr_includedir, "X11/dri"))
-    os.tryrm(path.join(sys_usr_includedir, "X11/PM"))
+    os.tryrm(path.join(_sys_usr_includedir(),"X11/extensions"))
+    os.tryrm(path.join(_sys_usr_includedir(),"X11/dri"))
+    os.tryrm(path.join(_sys_usr_includedir(),"X11/PM"))
     
     -- Remove individual X11 protocol header files
     local x11_headers = {
@@ -155,11 +160,11 @@ function uninstall()
         "X11/Xwinsock.h",
     }
     for _, header in ipairs(x11_headers) do
-        os.tryrm(path.join(sys_usr_includedir, header))
+        os.tryrm(path.join(_sys_usr_includedir(),header))
     end
 
     -- Remove GL headers
-    os.tryrm(path.join(sys_usr_includedir, "GL"))
+    os.tryrm(path.join(_sys_usr_includedir(),"GL"))
 
     -- Remove pkgconfig files
     local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
