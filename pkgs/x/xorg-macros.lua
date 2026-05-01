@@ -57,24 +57,23 @@ import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
 function install()
-    local scode_dir = path.absolute("util-macros-" .. pkginfo.version())
-    local build_dir = "build-util-macros"
+    -- xpkg sandbox: `path.absolute` is nil → derive scode dir from
+    -- `pkginfo.install_file()`. `os.cd` doesn't propagate to system.exec
+    -- children → chain configure/make/make-install in a single sh -c.
+    -- `os.cpuinfo` is nil → fixed -j8.
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "util-macros-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-util-macros")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_dir)
     os.tryrm(build_dir)
     os.mkdir(build_dir)
 
-    log.info("2.Configuring xorg-macros with autotools...")
-    os.cd(build_dir)
-    local prefix = pkginfo.install_dir()
-    system.exec(scode_dir .. "/configure" ..
-        " --prefix=" .. prefix)
-
-    log.info("3.Building xorg-macros...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing xorg-macros...")
-    system.exec("make install")
+    log.info("Configuring + building + installing xorg-macros (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --prefix=%s && make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -82,32 +81,30 @@ end
 function config()
     log.info("Adding xorg-macros to sysroot...")
 
-    -- pkgconfig
+    -- pkgconfig: copy xorg-macros.pc out of either share/ or lib/ pkgconfig
+    -- (autotools sometimes puts noarch .pc under share/, sometimes lib/).
     local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "share/pkgconfig"),
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "xorg-macros.pc"))) do
-                os.cp(pc, sys_pc_dir)
-            end
+    for _, pc_subdir in ipairs({"share/pkgconfig", "lib/pkgconfig"}) do
+        local pc_file = path.join(pkginfo.install_dir(), pc_subdir, "xorg-macros.pc")
+        if os.isfile(pc_file) then
+            os.cp(pc_file, sys_pc_dir, { force = true })
         end
     end
 
-    -- aclocal macros
+    -- aclocal macros: glob copy via shell since os.cp(glob,...) and
+    -- os.files(glob) are both sandbox-nil/no-op.
     local sys_aclocal_dir = path.join(system.subos_sysrootdir(), "usr/share/aclocal")
     os.mkdir(sys_aclocal_dir)
     local aclocal_dir = path.join(pkginfo.install_dir(), "share/aclocal")
     if os.isdir(aclocal_dir) then
-        for _, m4_file in ipairs(os.files(path.join(aclocal_dir, "*.m4"))) do
-            os.cp(m4_file, sys_aclocal_dir)
-        end
+        system.exec(string.format(
+            "sh -c 'cp -f %s/*.m4 %s/ 2>/dev/null || true'",
+            aclocal_dir, sys_aclocal_dir
+        ))
     end
 
-    -- util-macros directory
+    -- util-macros directory copy (literal dir, os.cp works)
     local util_dir = path.join(pkginfo.install_dir(), "share/util-macros")
     if os.isdir(util_dir) then
         os.cp(util_dir, path.join(system.subos_sysrootdir(), "usr/share"), { force = true })
