@@ -1,3 +1,7 @@
+function __automake_url(version)
+    return format("https://ftp.gnu.org/gnu/automake/automake-%s.tar.gz", version)
+end
+
 package = {
     spec = "1",
 
@@ -20,9 +24,16 @@ package = {
 
     xpm = {
         linux = {
-            deps = { "xim:configure-project-installer@0.0.1" },
+            deps = {
+                "xim:xpkg-helper@0.0.1",
+                "xim:gcc@15.1.0",
+                "xim:make@4.3",
+            },
             ["latest"] = { ref = "1.16.5" },
-            ["1.16.5"] = { },
+            ["1.16.5"] = {
+                url = __automake_url("1.16.5"),
+                sha256 = nil,
+            },
         },
     },
 }
@@ -35,12 +46,23 @@ import("xim.libxpkg.xvm")
 local binding_tree = "automake-binding-tree"
 
 function install()
-    local xpkg = package.name .. "@" .. pkginfo.version()
-    os.tryrm(pkginfo.install_dir())
+    -- Sandbox template (PR #49 bzip2): derive paths from pkginfo.install_file()
+    -- since path.absolute is nil; chain configure + make + install in single
+    -- sh -c (os.cd doesn't propagate to system.exec children).
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "automake-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-automake")
+    local prefix = pkginfo.install_dir()
 
-    system.exec("configure-project-installer " .. pkginfo.install_dir()
-        .. " --xpkg-scode " .. xpkg
-    )
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
+
+    log.info("Configuring + building + installing automake (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --prefix=%s "
+        .. "&& make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
