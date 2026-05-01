@@ -1,3 +1,7 @@
+function __readline_url(version)
+    return format("https://ftpmirror.gnu.org/gnu/readline/readline-%s.tar.gz", version)
+end
+
 package = {
     spec = "1",
 
@@ -7,7 +11,7 @@ package = {
     description = "GNU Readline Library for Command-line Editing",
 
     authors = "Chet Ramey",
-    licenses = "GPL",
+    licenses = "GPL-3.0",
     repo = "https://ftp.gnu.org/gnu/readline/",
 
     type = "package",
@@ -23,13 +27,15 @@ package = {
         linux = {
             deps = {
                 "xim:xpkg-helper@0.0.1",
-                "xim:configure-project-installer@0.0.1",
                 "xim:make@4.3",
-                "xim:gcc@11.5.0",                  -- readline 8.2 needs gcc ≥ 11 and < 15
-                "fromsource:ncurses@6.4",          -- for shared termcap library
+                "xim:gcc@11.5.0",                  -- readline 8.2 wants gcc < 15
+                "fromsource:ncurses@6.4",          -- shared termcap library
             },
             ["latest"] = { ref = "8.2" },
-            ["8.2"] = {},
+            ["8.2"] = {
+                url = __readline_url("8.2"),
+                sha256 = nil,
+            },
         },
     },
 }
@@ -41,52 +47,89 @@ import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 import("xim.libxpkg.utils")
 
-local function readline_libs()
-    local libdir = path.join(pkginfo.install_dir(), "lib")
+local function _ls_glob(globpat)
     local out = {}
-    
-    -- Scan for all libreadline*.so* and libhistory*.so* files
-    for _, file in ipairs(os.files(path.join(libdir, "libreadline*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
+    local h = io.popen("ls -1 " .. globpat .. " 2>/dev/null")
+    if not h then return out end
+    for line in h:lines() do
+        if line ~= "" then table.insert(out, path.filename(line)) end
     end
-    for _, file in ipairs(os.files(path.join(libdir, "libhistory*.so*"))) do
-        local name = path.filename(file)
-        table.insert(out, name)
-    end
-    
-    -- Add static libraries
-    table.insert(out, "libreadline.a")
-    table.insert(out, "libhistory.a")
-    
+    h:close()
     return out
 end
 
-local sys_usr_includedir = path.join(system.subos_sysrootdir(), "usr/include")
+local function readline_libs()
+    local libdir = path.join(pkginfo.install_dir(), "lib")
+    local out = {}
+    for _, name in ipairs(_ls_glob(path.join(libdir, "libreadline*.so*"))) do
+        table.insert(out, name)
+    end
+    for _, name in ipairs(_ls_glob(path.join(libdir, "libhistory*.so*"))) do
+        table.insert(out, name)
+    end
+    table.insert(out, "libreadline.a")
+    table.insert(out, "libhistory.a")
+    return out
+end
+
+local function _sys_usr_includedir()
+    return path.join(system.subos_sysrootdir(), "usr/include")
+end
+local function _sys_usr_libdir()
+    return path.join(system.subos_sysrootdir(), "usr/lib")
+end
 
 function install()
-    local xpkg = package.name .. "@" .. pkginfo.version()
-    local src_dir = path.absolute("readline-" .. pkginfo.version())
+    -- Sandbox template (PR #49 bzip2): derive paths from pkginfo.install_file()
+    -- since path.absolute is nil; chain patch-fetch + patch-apply + configure
+    -- + make + install in a single sh -c (os.cd doesn't propagate; we have
+    -- 13 upstream readline patches to fetch and apply before configure).
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "readline-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-readline")
+    local prefix = pkginfo.install_dir()
 
-    os.tryrm(pkginfo.install_dir())
-    os.tryrm(src_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    pkgmanager.install("scode:" .. xpkg)
-    system.exec(string.format("xpkg-helper scode:%s --export-path %s", xpkg, src_dir))
-
-    __patch_for_readline(src_dir)
-
-    -- TODO: add rpath for shared libraries?
-    -- https://stackoverflow.com/questions/46881581/libreadline-so-7-undefined-symbol-up
-    os.setenv("LDFLAGS", "-Wl,-rpath,/home/xlings/.xlings_data/subos/linux/lib")
-    
-    -- Use ncurses instead of termcap (modern ncurses removed termcap compat)
-    system.exec("configure-project-installer " .. pkginfo.install_dir()
-        .. " --project-dir " .. src_dir
-        -- " --args " .. [[ "--enable-shared --with-curses" ]]
-        -- undefined-symbol-up - xmake + glib
-        .. " --args " .. [[ "--enable-shared --with-shared-termcap-library --with-curses" ]]
-    )
+    log.info("Re-extracting source, downloading + applying upstream readline-8.2 patches 001..013, then build...")
+    -- We re-extract from the tarball into runtime_dir so the source is a
+    -- pristine patchlevel=0 every time install() runs. xlings's own extract
+    -- step is a one-shot on first download; if a previous install attempt
+    -- left the source dir partially patched, xlings does not re-extract on
+    -- the next attempt — so we do it ourselves here. Then fetch + apply the
+    -- 13 upstream patches and build out-of-tree.
+    --
+    -- CPPFLAGS / LDFLAGS point at the subos sysroot where xim:ncurses.config()
+    -- placed its libtinfo / libncurses headers + libs (xvm.add registers
+    -- shims under subos/{lib,usr/include}). Without these, configure's
+    -- -ltinfo / -ltermcap probe fails and readline falls back to stub
+    -- declarations of tputs/tgoto with empty arglists, which then
+    -- mismatch the call sites in display.c (`too many arguments to
+    -- function 'tgoto'`).
+    local tarball = pkginfo.install_file()
+    local sysroot = system.subos_sysrootdir()
+    -- ftp.gnu.org direct (ftpmirror.gnu.org load-balances and occasionally
+    -- 404s on individual patches between rotations; canonical source is stable).
+    local patch_base = "https://ftp.gnu.org/gnu/readline/readline-" .. pkginfo.version() .. "-patches"
+    system.exec(string.format(
+        "sh -c 'set -e; cd %s && rm -rf %s && tar -xf %s "
+        .. "&& cd %s "
+        .. "&& for i in 001 002 003 004 005 006 007 008 009 010 011 012 013; do "
+        .. "    curl -sLf -O %s/readline82-$i; "
+        .. "    patch -p0 -i readline82-$i; "
+        .. "  done "
+        .. "&& cd %s "
+        .. "&& CPPFLAGS=\"-I%s/usr/include -I%s/usr/include/ncurses\" "
+        .. "LDFLAGS=\"-L%s/lib -Wl,-rpath,/home/xlings/.xlings_data/subos/linux/lib\" "
+        .. "%s/configure --prefix=%s --enable-shared --with-shared-termcap-library --with-curses "
+        .. "&& make -j8 && make install'",
+        runtime_dir, scode_dir, tarball,
+        scode_dir, patch_base,
+        build_dir,
+        sysroot, sysroot, sysroot,
+        scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
@@ -97,7 +140,7 @@ function config()
 
     log.warn("add libs...")
     local libdir = path.join(pkginfo.install_dir(), "lib")
-    local config = {
+    local cfg = {
         type = "lib",
         version = "readline-" .. pkginfo.version(),
         bindir = libdir,
@@ -105,27 +148,27 @@ function config()
     }
 
     for _, lib in ipairs(readline_libs()) do
-        config.alias = lib
-        config.filename = lib
-        xvm.add(lib, config)
+        cfg.alias = lib
+        cfg.filename = lib
+        xvm.add(lib, cfg)
     end
 
     log.warn("add header files to sysroot...")
+    local sys_inc = _sys_usr_includedir()
+    if not os.isdir(sys_inc) then os.mkdir(sys_inc) end
     local hdr_dir = path.join(pkginfo.install_dir(), "include", "readline")
-    local sys_readline_includedir = path.join(sys_usr_includedir, "readline")
-    os.mkdir(sys_usr_includedir)
-    os.cp(hdr_dir, sys_readline_includedir, { force = true })
-
-    -- Copy pkgconfig files
-    log.warn("add pkgconfig files to sysroot...")
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    os.mkdir(sys_pc_dir)
-    local pc_dir = path.join(pkginfo.install_dir(), "lib/pkgconfig")
-    if os.isdir(pc_dir) then
-        for _, pc in ipairs(os.files(path.join(pc_dir, "*.pc"))) do
-            os.cp(pc, sys_pc_dir)
-        end
+    if os.isdir(hdr_dir) then
+        os.cp(hdr_dir, path.join(sys_inc, "readline"), { force = true })
     end
+
+    log.warn("add pkgconfig files to sysroot...")
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
+    if not os.isdir(sys_pc_dir) then os.mkdir(sys_pc_dir) end
+    -- shell cp glob: os.files(*.pc) is unreliable in 0.4.9 sandbox
+    system.exec(string.format(
+        "sh -c 'cp -f %s/lib/pkgconfig/readline*.pc %s/lib/pkgconfig/history*.pc %s/ 2>/dev/null || true'",
+        pkginfo.install_dir(), pkginfo.install_dir(), sys_pc_dir
+    ))
 
     xvm.add("readline", { binding = version_tag })
 
@@ -139,36 +182,17 @@ function uninstall()
         xvm.remove(lib, "readline-" .. pkginfo.version())
     end
 
-    os.tryrm(path.join(sys_usr_includedir, "readline"))
+    local sys_inc = _sys_usr_includedir()
+    os.tryrm(path.join(sys_inc, "readline"))
 
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "readline*.pc"))) do
-        os.tryrm(pc)
-    end
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "history*.pc"))) do
-        os.tryrm(pc)
-    end
+    -- Remove pkgconfig files via shell glob
+    local sys_pc_dir = path.join(_sys_usr_libdir(), "pkgconfig")
+    system.exec(string.format(
+        "sh -c 'rm -f %s/readline*.pc %s/history*.pc 2>/dev/null || true'",
+        sys_pc_dir, sys_pc_dir
+    ))
 
     xvm.remove("readline-binding-tree")
 
     return true
-end
-
--- private
--- fix build python crash coredump issue
-function __patch_for_readline(src_dir)
-    local patch_url_template = "https://ftpmirror.gnu.org/gnu/readline/readline-8.2-patches/readline82-" -- XX.patch
-    os.cd(src_dir)
-    -- from 001 -> 013
-    for i = 1, 13 do
-        local patch_num = string.format("%03d", i)
-        local patch_url = patch_url_template .. patch_num
-        local patch_file = "readline82-" .. patch_num -- .. ".patch"
-        log.warn("[%02d/13] - download patch: %s", i, patch_url)
-        utils.try_download_and_check(patch_url, src_dir)
-        --os.trymv("readline82-" .. patch_num, patch_file)
-        log.warn("apply patch: " .. patch_file)
-        system.exec("patch -p0 -i " .. patch_file)
-    end
 end
