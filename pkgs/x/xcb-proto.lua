@@ -55,53 +55,45 @@ import("xim.libxpkg.log")
 import("xim.libxpkg.xvm")
 
 function install()
-    local scode_xcb_proto_dir = path.absolute("xcb-proto-" .. pkginfo.version())
-    local build_xcb_proto_dir = "build-xcb-proto"
+    -- sandbox template (#49 bzip2)
+    local runtime_dir = path.directory(pkginfo.install_file())
+    local scode_dir = path.join(runtime_dir, "xcb-proto-" .. pkginfo.version())
+    local build_dir = path.join(runtime_dir, "build-xcb-proto")
+    local prefix = pkginfo.install_dir()
 
-    log.info("1.Creating build dir -" .. build_xcb_proto_dir)
-    os.tryrm(build_xcb_proto_dir)
-    os.mkdir(build_xcb_proto_dir)
+    os.tryrm(build_dir)
+    os.mkdir(build_dir)
 
-    log.info("2.Configuring xcb-proto with autotools...")
-    os.cd(build_xcb_proto_dir)
-    local xcb_proto_prefix = pkginfo.install_dir()
-    system.exec("" .. scode_xcb_proto_dir .. "/configure"
-        .. " --prefix=" .. xcb_proto_prefix
-    )
-
-    log.info("3.Building xcb-proto...")
-    system.exec(string.format("make -j%d", os.cpuinfo("ncpu") or 4))
-
-    log.info("4.Installing xcb-proto...")
-    system.exec("make install")
+    log.info("Configuring + building + installing xcb-proto (autotools)...")
+    system.exec(string.format(
+        "sh -c 'cd %s && %s/configure --prefix=%s && make -j8 && make install'",
+        build_dir, scode_dir, prefix
+    ))
 
     return os.isdir(pkginfo.install_dir())
 end
 
 function config()
     log.info("Adding xcb-proto data files to sysroot...")
-    
-    -- xcb-proto installs XML protocol descriptions and Python modules
-    -- Copy pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
+    local sysroot = system.subos_sysrootdir()
+    local sys_pc_dir = path.join(sysroot, "usr/lib/pkgconfig")
     os.mkdir(sys_pc_dir)
-    local pc_dirs = {
-        path.join(pkginfo.install_dir(), "lib/pkgconfig"),
-        path.join(pkginfo.install_dir(), "share/pkgconfig"),
-    }
-    for _, pc_dir in ipairs(pc_dirs) do
-        if os.isdir(pc_dir) then
-            for _, pc in ipairs(os.files(path.join(pc_dir, "*.pc"))) do
-                local filename = path.filename(pc)
-                if filename:match("^xcb%-proto") then
-                    os.cp(pc, sys_pc_dir)
-                end
-            end
+
+    -- xcb-proto.pc lives in lib/pkgconfig or share/pkgconfig depending on
+    -- arch detection. Use shell glob (sandbox os.files/os.cp(glob,…) are
+    -- both broken). The leading-name check excludes any unrelated .pc.
+    for _, pc_subdir in ipairs({"lib/pkgconfig", "share/pkgconfig"}) do
+        local src = path.join(pkginfo.install_dir(), pc_subdir)
+        if os.isdir(src) then
+            system.exec(string.format(
+                "sh -c 'cp -f %s/xcb-proto*.pc %s/ 2>/dev/null || true'",
+                src, sys_pc_dir
+            ))
         end
     end
 
-    -- Copy xcb protocol XML files to sysroot
-    local sys_share_dir = path.join(system.subos_sysrootdir(), "usr/share")
+    -- xcb XML protocol descriptions (literal dir copy works).
+    local sys_share_dir = path.join(sysroot, "usr/share")
     os.mkdir(sys_share_dir)
     local xcb_share_dir = path.join(pkginfo.install_dir(), "share/xcb")
     if os.isdir(xcb_share_dir) then
@@ -115,16 +107,11 @@ end
 
 function uninstall()
     xvm.remove("xcb-proto")
-
-    -- Remove pkgconfig files
-    local sys_pc_dir = path.join(system.subos_sysrootdir(), "usr/lib/pkgconfig")
-    for _, pc in ipairs(os.files(path.join(sys_pc_dir, "xcb-proto*.pc"))) do
-        os.tryrm(pc)
-    end
-
-    -- Remove xcb protocol data files
-    local sys_share_dir = path.join(system.subos_sysrootdir(), "usr/share")
-    os.tryrm(path.join(sys_share_dir, "xcb"))
-
+    local sysroot = system.subos_sysrootdir()
+    -- glob unlink via shell (sandbox os.files is nil).
+    system.exec(string.format(
+        "sh -c 'rm -f %s/usr/lib/pkgconfig/xcb-proto*.pc'", sysroot
+    ))
+    os.tryrm(path.join(sysroot, "usr/share/xcb"))
     return true
 end
