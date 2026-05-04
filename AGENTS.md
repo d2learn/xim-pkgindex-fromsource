@@ -2,7 +2,7 @@
 
 ### Project overview
 
-This is `xim-pkgindex-fromsource`, a package index repository for the [xlings](https://github.com/d2learn/xlings) ecosystem's `xim` package manager. It defines how to build ~45 system-level software packages **from source code** on Linux (x86_64). The repository contains only Lua package definition files — there are no compiled applications or running services.
+This is `xim-pkgindex-fromsource`, a package index repository for the [xlings](https://github.com/openxlings/xlings) ecosystem's `xim` package manager. It defines how to build ~45 system-level software packages **from source code** on Linux (x86_64). The repository contains only Lua package definition files — there are no compiled applications or running services.
 
 ### Development environment
 
